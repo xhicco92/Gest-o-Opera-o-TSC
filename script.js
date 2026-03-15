@@ -5,7 +5,7 @@ let cabecalhosOriginais = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard com novos indicadores...');
+    console.log('🚀 Inicializando dashboard com cálculos...');
     
     adicionarBotaoUpload();
     
@@ -109,23 +109,21 @@ function processarDadosExcel(dados) {
     cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Mapear índices
-    const idxPolo = encontrarIndice(cabecalhos, ['polo', 'Polo', 'unidade']);
-    const idxArea = encontrarIndice(cabecalhos, ['area', 'Área', 'departamento']);
-    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'garantia', 'Tipo Garantia']);
-    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'checkin', 'Data Entrada']);
+    // Mapear índices (coluna I = índice 8, zero-based)
+    const idxTipologia = encontrarIndice(cabecalhos, ['tipologia', 'Tipologia', 'area', 'Área']);
+    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint', 'Estado', 'status']);
     const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça', 'aguarda peça']);
-    const idxAguardaCotacao = encontrarIndice(cabecalhos, ['aguarda_cotacao_de_peca', 'aguarda cotação', 'cotação']);
-    const idxTipoReparacao = encontrarIndice(cabecalhos, ['tipo_reparacao', 'Tipo Reparação']);
+    const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin', 'Data Entrada']);
+    const idxPolo = encontrarIndice(cabecalhos, ['polo', 'Polo', 'unidade']);
+    const idxTipoGarantia = 8; // Coluna I (índice 8, zero-based)
     
     console.log('📍 Mapeamento:', {
-        polo: idxPolo,
-        area: idxArea,
-        garantia: idxGarantia,
-        data: idxData,
+        tipologia: idxTipologia,
+        checkpoint: idxCheckpoint,
         pendente_peca: idxPendentePeca,
-        aguarda_cotacao: idxAguardaCotacao,
-        tipo_reparacao: idxTipoReparacao
+        data_checkin: idxDataCheckin,
+        polo: idxPolo,
+        tipo_garantia: idxTipoGarantia
     });
     
     // Processar dados
@@ -143,15 +141,14 @@ function processarDadosExcel(dados) {
         }
         
         // Extrair valores
-        const area = idxArea !== -1 ? linha[idxArea] : '';
-        const tipoGarantia = idxGarantia !== -1 ? linha[idxGarantia] : '';
-        const dataCheckin = idxData !== -1 ? linha[idxData] : null;
+        const tipologia = idxTipologia !== -1 ? String(linha[idxTipologia] || '') : '';
+        const checkpoint = idxCheckpoint !== -1 ? String(linha[idxCheckpoint] || '') : '';
         const pendentePeca = idxPendentePeca !== -1 ? String(linha[idxPendentePeca] || '').toLowerCase() : '';
-        const aguardaCotacao = idxAguardaCotacao !== -1 ? String(linha[idxAguardaCotacao] || '').toLowerCase() : '';
-        const tipoReparacao = idxTipoReparacao !== -1 ? String(linha[idxTipoReparacao] || '').toLowerCase() : '';
+        const dataCheckin = idxDataCheckin !== -1 ? linha[idxDataCheckin] : null;
+        const tipoGarantia = linha[idxTipoGarantia] ? String(linha[idxTipoGarantia]) : '';
         
-        // Calcular TAT
-        let tempoReparo = 0;
+        // Calcular TAT (dias desde data_checkin)
+        let tat = 0;
         if (dataCheckin) {
             try {
                 let dataEntrada;
@@ -162,68 +159,81 @@ function processarDadosExcel(dados) {
                 }
                 if (!isNaN(dataEntrada)) {
                     const hoje = new Date();
-                    tempoReparo = Math.abs(hoje - dataEntrada) / (1000 * 60 * 60 * 24);
+                    tat = Math.abs(hoje - dataEntrada) / (1000 * 60 * 60 * 24);
                 }
             } catch (e) {}
         }
         
-        // Normalizar área
-        let areaNorm = 'Outros';
-        const areaStr = String(area || '').toUpperCase();
+        // Determinar se pendente peça é Sim/Não
+        const isPendentePeca = pendentePeca.includes('sim') || pendentePeca === 's' || pendentePeca === '1';
         
-        if (areaStr.includes('MOBILE') || areaStr.includes('TELEMOVEL')) {
-            if (areaStr.includes('D&G') || areaStr.includes('DG')) {
+        // Mapear tipo_garantia para negócio
+        let negocio = '';
+        const tg = tipoGarantia.toLowerCase();
+        
+        if (tg.includes('pop') || tg.includes('stock de loja') || tg.includes('garantias')) {
+            negocio = 'Garantias';
+        } else if (tg.includes('fora de garantia') || tg.includes('instore mobility')) {
+            negocio = 'Fora de Garantia';
+        } else if (tg.includes('eg+1') || tg.includes('eg+3') || tg.includes('extensão')) {
+            negocio = 'Extensão de Garantia';
+        } else if (tg.includes('seguro d&g') || tg.includes('d&g')) {
+            negocio = 'D&G';
+        } else {
+            negocio = 'Outros';
+        }
+        
+        // Normalizar tipologia para as áreas do dashboard
+        let areaNorm = 'Outros';
+        const tipologiaUpper = tipologia.toUpperCase();
+        
+        if (tipologiaUpper.includes('MOBILE') || tipologiaUpper.includes('TELEMOVEL')) {
+            if (tipologiaUpper.includes('D&G') || tipologiaUpper.includes('DG') || negocio === 'D&G') {
                 areaNorm = 'Mobile D&G';
             } else {
                 areaNorm = 'Mobile Cliente';
             }
-        } else if (areaStr.includes('INFORMATICA') || areaStr.includes('PC') || areaStr.includes('NOTEBOOK')) {
+        } else if (tipologiaUpper.includes('INFORMATICA') || tipologiaUpper.includes('PC') || tipologiaUpper.includes('NOTEBOOK')) {
             areaNorm = 'Informática';
-        } else if (areaStr.includes('DOMESTICO') || areaStr.includes('PDA') || areaStr.includes('ELECTRO')) {
+        } else if (tipologiaUpper.includes('DOMESTICO') || tipologiaUpper.includes('PDA') || tipologiaUpper.includes('ELECTRO')) {
             areaNorm = 'Pequenos Domésticos';
-        } else if (areaStr.includes('SOM') || areaStr.includes('IMAGEM') || areaStr.includes('TV') || areaStr.includes('AUDIO')) {
+        } else if (tipologiaUpper.includes('SOM') || tipologiaUpper.includes('IMAGEM') || tipologiaUpper.includes('TV') || tipologiaUpper.includes('AUDIO')) {
             areaNorm = 'Som e Imagem';
-        } else if (areaStr.includes('ENTRETENIMENTO') || areaStr.includes('GAMING') || areaStr.includes('CONSOLA')) {
+        } else if (tipologiaUpper.includes('ENTRETENIMENTO') || tipologiaUpper.includes('GAMING') || tipologiaUpper.includes('CONSOLA')) {
             areaNorm = 'Entretenimento';
         }
         
-        // Normalizar negócio
-        let negocioNorm = 'Garantias';
-        const tg = String(tipoGarantia || '').toUpperCase();
-        if (tg.includes('FORA') || tg.includes('PAGO')) {
-            negocioNorm = 'Fora de Garantia';
-        } else if (tg.includes('EXTENSAO') || tg.includes('PROTECAO')) {
-            negocioNorm = 'Extensão de Garantia';
+        // Ajustar área para Mobile D&G quando negócio é D&G
+        if (negocio === 'D&G') {
+            areaNorm = 'Mobile D&G';
         }
-        
-        if (areaNorm === 'Mobile D&G') {
-            negocioNorm = 'D&G';
-        }
-        
-        // Mapear flags
-        const isPendentePeca = pendentePeca.includes('sim') || pendentePeca.includes('s') || pendentePeca === '1';
-        const isAguardaCotacao = aguardaCotacao.includes('sim') || aguardaCotacao.includes('s') || aguardaCotacao === '1';
-        const isOrcamento = tipoReparacao.includes('orcamento') || tipoReparacao.includes('orçamento');
         
         dadosBrutos.push({
             id: dadosBrutos.length + 1,
             area: areaNorm,
-            negocio: negocioNorm,
-            data_entrada: dataCheckin,
-            tempo_reparo: Math.round(tempoReparo * 10) / 10,
+            negocio: negocio,
+            tipologia_original: tipologia,
+            tipo_garantia_original: tipoGarantia,
+            checkpoint: checkpoint,
             pendente_peca: isPendentePeca,
-            aguarda_cotacao: isAguardaCotacao,
-            is_orcamento: isOrcamento,
-            tipo_garantia: tipoGarantia,
+            data_checkin: dataCheckin,
+            tat: tat,
             polo: polo
         });
     }
     
     console.log(`✅ Processados ${dadosBrutos.length} registos (TSC South apenas)`);
+    console.log('📊 Distribuição por negócio:', {
+        garantias: dadosBrutos.filter(d => d.negocio === 'Garantias').length,
+        foraGarantia: dadosBrutos.filter(d => d.negocio === 'Fora de Garantia').length,
+        extensao: dadosBrutos.filter(d => d.negocio === 'Extensão de Garantia').length,
+        dg: dadosBrutos.filter(d => d.negocio === 'D&G').length,
+        outros: dadosBrutos.filter(d => d.negocio === 'Outros').length
+    });
     
     if (dadosBrutos.length > 0) {
         ultimaAtualizacao = new Date();
-        atualizarInterface();
+        calcularEMostrarMetricas();
     } else {
         carregarDadosExemplo();
     }
@@ -235,6 +245,7 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
         const cab = String(cabecalhos[i] || '').toLowerCase().trim();
         for (let nome of possiveisNomes) {
             if (cab.includes(nome.toLowerCase())) {
+                console.log(`✅ Coluna "${cabecalhos[i]}" corresponde a "${nome}" (índice ${i})`);
                 return i;
             }
         }
@@ -244,99 +255,102 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
 
 // Função para calcular as métricas por área e negócio
 function calcularMetricas() {
-    // Estrutura para cada combinação área + negócio
-    const metricas = {
-        mobileCliente: {
-            Garantias: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            ForaGarantia: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            Extensao: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        },
-        mobileDG: {
-            DG: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        },
-        informatica: {
-            Garantias: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            ForaGarantia: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            Extensao: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        },
-        pequenosDomesticos: {
-            Garantias: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            ForaGarantia: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            Extensao: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        },
-        somImagem: {
-            Garantias: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            ForaGarantia: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            Extensao: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        },
-        entretenimento: {
-            Garantias: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            ForaGarantia: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 },
-            Extensao: { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0, somaTat:0, countTat:0 }
-        }
-    };
+    // Mapeamento de checkpoints para estados
+    const estadosAnalise = ['análise técnica', 'analise tecnica', 'análise', 'analise'];
+    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'reparação', 'reparacao'];
+    const estadosTAT = ['análise técnica', 'analise tecnica', 'intervenção técnica', 'intervencao tecnica', 
+                       'orçamento', 'orcamento', 'aguarda aceitação orçamento', 'aguarda aceitacao orcamento',
+                       'nível 3', 'nivel 3', 'pré-análise', 'pre-analise', 'controlo de qualidade'];
+    const estadosOrcamento = ['orçamento', 'orcamento'];
+    const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
+    const estadosDebito = ['debit', 'débito', 'debito'];
 
-    const mapaAreas = {
-        'Mobile Cliente': 'mobileCliente',
-        'Mobile D&G': 'mobileDG',
-        'Informática': 'informatica',
-        'Pequenos Domésticos': 'pequenosDomesticos',
-        'Som e Imagem': 'somImagem',
-        'Entretenimento': 'entretenimento'
+    // Estrutura para armazenar métricas por área e negócio
+    const metricas = {
+        'Mobile Cliente': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        },
+        'Mobile D&G': {
+            'D&G': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        },
+        'Informática': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        },
+        'Pequenos Domésticos': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        },
+        'Som e Imagem': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        },
+        'Entretenimento': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
+        }
     };
 
     // Processar cada registo
     dadosBrutos.forEach(item => {
-        const areaKey = mapaAreas[item.area];
-        if (!areaKey) return;
+        const area = item.area;
+        if (!metricas[area]) return;
         
-        let negocioKey;
-        if (item.negocio === 'Garantias') negocioKey = 'Garantias';
-        else if (item.negocio === 'Fora de Garantia') negocioKey = 'ForaGarantia';
-        else if (item.negocio === 'Extensão de Garantia') negocioKey = 'Extensao';
-        else if (item.negocio === 'D&G') negocioKey = 'DG';
-        else return;
+        const negocio = item.negocio;
+        if (!metricas[area][negocio]) return;
         
-        const stats = metricas[areaKey][negocioKey];
-        if (!stats) return;
+        const stats = metricas[area][negocio];
+        const checkpoint = item.checkpoint.toLowerCase();
         
-        // Análises (contagem por tipo de garantia)
-        stats.analises++;
+        // Análises
+        if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
+            stats.analises++;
+        }
         
-        // Reparações (apenas não concluídos)
-        if (item.tempo_reparo > 0) { // Consideramos que tempo_reparo > 0 significa em aberto
-            stats.reparacoesGlobal++;
+        // Reparação
+        if (estadosReparacao.some(estado => checkpoint.includes(estado))) {
+            stats.reparacao++;
+            
+            // Pendente/Não Pendente Peça
             if (item.pendente_peca) {
-                stats.reparacoesPendentes++;
+                stats.repPendentePeca++;
             } else {
-                stats.reparacoesNaoPendentes++;
+                stats.repNaoPendentePeca++;
             }
         }
         
-        // TAT Aberto
-        if (item.tempo_reparo > 0) {
-            stats.somaTat += item.tempo_reparo;
+        // TAT Aberto (soma para cálculo da média)
+        if (estadosTAT.some(estado => checkpoint.includes(estado))) {
+            stats.somaTat += item.tat;
             stats.countTat++;
         }
         
-        // Orçamentos
-        if (item.is_orcamento) {
-            stats.orcamentos++;
+        // Orçamento
+        if (estadosOrcamento.some(estado => checkpoint.includes(estado))) {
+            stats.orcamento++;
         }
         
         // Aguarda Aceitação
-        if (item.aguarda_cotacao) {
-            stats.aguardaAceitacao++;
+        if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
+            stats.agAceitacao++;
         }
         
-        // Débitos WSS (todos os registos por enquanto)
-        stats.debitosWSS = stats.analises; // Depois ajustamos conforme definição
+        // Débitos
+        if (estadosDebito.some(estado => checkpoint.includes(estado))) {
+            stats.debitos++;
+        }
     });
 
-    // Calcular médias
+    // Calcular médias do TAT
     Object.keys(metricas).forEach(area => {
-        Object.keys(metricas[area]).forEach(neg => {
-            const stats = metricas[area][neg];
+        Object.keys(metricas[area]).forEach(negocio => {
+            const stats = metricas[area][negocio];
             if (stats.countTat > 0) {
                 stats.tatAberto = Math.round((stats.somaTat / stats.countTat) * 10) / 10;
             }
@@ -346,230 +360,164 @@ function calcularMetricas() {
     return metricas;
 }
 
-// Função para atualizar a interface com os novos campos
-function atualizarInterface() {
+// Função para mostrar as métricas no dashboard
+function calcularEMostrarMetricas() {
     const metricas = calcularMetricas();
     console.log('📊 Métricas calculadas:', metricas);
     
-    // Totais globais (somando todas as áreas)
-    let totalGeral = 0;
+    // Atualizar cada campo no HTML
+    const areas = [
+        { nome: 'Mobile Cliente', prefix: 'mobileCliente', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
+        { nome: 'Mobile D&G', prefix: 'mobileDG', negocios: ['DG'] },
+        { nome: 'Informática', prefix: 'informatica', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
+        { nome: 'Pequenos Domésticos', prefix: 'pequenos', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
+        { nome: 'Som e Imagem', prefix: 'som', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
+        { nome: 'Entretenimento', prefix: 'entretenimento', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] }
+    ];
+    
+    // Mapeamento de nomes de negócio para chaves nas métricas
+    const mapaNegocios = {
+        'Garantias': 'Garantias',
+        'ForaGarantia': 'Fora de Garantia',
+        'Extensao': 'Extensão de Garantia',
+        'DG': 'D&G'
+    };
+    
+    areas.forEach(areaConfig => {
+        const areaMetricas = metricas[areaConfig.nome];
+        if (!areaMetricas) return;
+        
+        // Total da área (soma de todas as análises)
+        let totalArea = 0;
+        
+        areaConfig.negocios.forEach(negocioKey => {
+            const negocioNome = mapaNegocios[negocioKey];
+            const stats = areaMetricas[negocioNome];
+            if (!stats) return;
+            
+            totalArea += stats.analises || 0;
+            
+            // Determinar prefixo correto para os IDs
+            let prefix = areaConfig.prefix;
+            
+            // Atualizar cada campo
+            const campos = [
+                { id: `${prefix}${negocioKey}Analises`, valor: stats.analises },
+                { id: `${prefix}${negocioKey}Reparacao`, valor: stats.reparacao },
+                { id: `${prefix}${negocioKey}RepPendentePeca`, valor: stats.repPendentePeca },
+                { id: `${prefix}${negocioKey}RepNaoPendentePeca`, valor: stats.repNaoPendentePeca },
+                { id: `${prefix}${negocioKey}TATAberto`, valor: stats.tatAberto ? stats.tatAberto.toFixed(1) : '0.0' },
+                { id: `${prefix}${negocioKey}Orcamento`, valor: stats.orcamento },
+                { id: `${prefix}${negocioKey}AgAceitacao`, valor: stats.agAceitacao },
+                { id: `${prefix}${negocioKey}Debitos`, valor: stats.debitos }
+            ];
+            
+            campos.forEach(campo => {
+                const element = document.getElementById(campo.id);
+                if (element) {
+                    element.textContent = campo.valor;
+                } else {
+                    console.log(`Elemento não encontrado: ${campo.id}`);
+                }
+            });
+        });
+        
+        // Atualizar total da área
+        const totalId = `total${areaConfig.prefix === 'mobileDG' ? 'MobileDG' : 
+            (areaConfig.prefix.charAt(0).toUpperCase() + areaConfig.prefix.slice(1))}`;
+        const totalElement = document.getElementById(totalId);
+        if (totalElement) {
+            totalElement.textContent = totalArea;
+        }
+    });
+    
+    // Calcular KPIs globais
+    let totalAnalises = 0;
+    let somaTatGlobal = 0;
+    let countTatGlobal = 0;
+    let totalOrcamentos = 0;
+    let totalAguarda = 0;
+    let totalDebitos = 0;
+    
     Object.values(metricas).forEach(area => {
         Object.values(area).forEach(neg => {
-            if (typeof neg === 'object') {
-                totalGeral += neg.analises || 0;
-            }
+            totalAnalises += neg.analises || 0;
+            somaTatGlobal += neg.somaTat || 0;
+            countTatGlobal += neg.countTat || 0;
+            totalOrcamentos += neg.orcamento || 0;
+            totalAguarda += neg.agAceitacao || 0;
+            totalDebitos += neg.debitos || 0;
         });
     });
-    document.getElementById('totalEntradas').textContent = totalGeral;
     
-    // TAT Médio Global
-    let somaTatGlobal = 0, countTatGlobal = 0;
-    Object.values(metricas).forEach(area => {
-        Object.values(area).forEach(neg => {
-            if (typeof neg === 'object') {
-                somaTatGlobal += neg.somaTat || 0;
-                countTatGlobal += neg.countTat || 0;
-            }
-        });
-    });
-    const tatMedio = countTatGlobal > 0 ? (somaTatGlobal / countTatGlobal).toFixed(1) : 0;
-    document.getElementById('tatMedio').textContent = tatMedio;
+    document.getElementById('totalEntradas').textContent = totalAnalises;
+    document.getElementById('tatMedio').textContent = countTatGlobal > 0 ? (somaTatGlobal / countTatGlobal).toFixed(1) : '0';
+    document.getElementById('taxaSucessoGlobal').textContent = totalAnalises > 0 ? Math.round((totalAnalises - totalAguarda) / totalAnalises * 100) : '0';
+    document.getElementById('nssMedio').textContent = totalOrcamentos;
+    document.getElementById('produtividadeGlobal').textContent = totalAguarda;
     
-    // Taxa de Sucesso Global (reparações não pendentes / total reparações)
-    let reparacoesTotal = 0, reparacoesNaoPendentes = 0;
-    Object.values(metricas).forEach(area => {
-        Object.values(area).forEach(neg => {
-            if (typeof neg === 'object') {
-                reparacoesTotal += neg.reparacoesGlobal || 0;
-                reparacoesNaoPendentes += neg.reparacoesNaoPendentes || 0;
-            }
-        });
-    });
-    const taxaSucesso = reparacoesTotal > 0 ? Math.round((reparacoesNaoPendentes / reparacoesTotal) * 100) : 0;
-    document.getElementById('taxaSucessoGlobal').textContent = taxaSucesso;
-    
-    // NSS Global (substituído por Orçamentos + Aguarda Aceitação)
-    let orcamentosTotal = 0, aguardaTotal = 0;
-    Object.values(metricas).forEach(area => {
-        Object.values(area).forEach(neg => {
-            if (typeof neg === 'object') {
-                orcamentosTotal += neg.orcamentos || 0;
-                aguardaTotal += neg.aguardaAceitacao || 0;
-            }
-        });
-    });
-    document.getElementById('nssMedio').textContent = orcamentosTotal; // Temporário
-    document.getElementById('produtividadeGlobal').textContent = aguardaTotal; // Temporário
-    
-    // Atualizar totais por área (mantém os IDs existentes)
-    document.getElementById('totalMobileCliente').textContent = 
-        (metricas.mobileCliente?.Garantias?.analises || 0) + 
-        (metricas.mobileCliente?.ForaGarantia?.analises || 0) + 
-        (metricas.mobileCliente?.Extensao?.analises || 0);
-    
-    document.getElementById('totalMobileDG').textContent = metricas.mobileDG?.DG?.analises || 0;
-    
-    document.getElementById('totalInformatica').textContent = 
-        (metricas.informatica?.Garantias?.analises || 0) + 
-        (metricas.informatica?.ForaGarantia?.analises || 0) + 
-        (metricas.informatica?.Extensao?.analises || 0);
-    
-    document.getElementById('totalPequenosDomesticos').textContent = 
-        (metricas.pequenosDomesticos?.Garantias?.analises || 0) + 
-        (metricas.pequenosDomesticos?.ForaGarantia?.analises || 0) + 
-        (metricas.pequenosDomesticos?.Extensao?.analises || 0);
-    
-    document.getElementById('totalSomImagem').textContent = 
-        (metricas.somImagem?.Garantias?.analises || 0) + 
-        (metricas.somImagem?.ForaGarantia?.analises || 0) + 
-        (metricas.somImagem?.Extensao?.analises || 0);
-    
-    document.getElementById('totalEntretenimento').textContent = 
-        (metricas.entretenimento?.Garantias?.analises || 0) + 
-        (metricas.entretenimento?.ForaGarantia?.analises || 0) + 
-        (metricas.entretenimento?.Extensao?.analises || 0);
-    
-    // Agora atualizar os campos de cada negócio com os novos indicadores
-    // Mobile Cliente
-    atualizarNegocioMetricas('mobileCliente', 'Garantias', metricas.mobileCliente?.Garantias);
-    atualizarNegocioMetricas('mobileCliente', 'ForaGarantia', metricas.mobileCliente?.ForaGarantia);
-    atualizarNegocioMetricas('mobileCliente', 'Extensao', metricas.mobileCliente?.Extensao);
-    
-    // Mobile D&G
-    atualizarNegocioMetricas('mobile', 'DG', metricas.mobileDG?.DG);
-    
-    // Informática
-    atualizarNegocioMetricas('informatica', 'Garantias', metricas.informatica?.Garantias);
-    atualizarNegocioMetricas('informatica', 'ForaGarantia', metricas.informatica?.ForaGarantia);
-    atualizarNegocioMetricas('informatica', 'Extensao', metricas.informatica?.Extensao);
-    
-    // Pequenos Domésticos
-    atualizarNegocioMetricas('pequenos', 'Garantias', metricas.pequenosDomesticos?.Garantias);
-    atualizarNegocioMetricas('pequenos', 'ForaGarantia', metricas.pequenosDomesticos?.ForaGarantia);
-    atualizarNegocioMetricas('pequenos', 'Extensao', metricas.pequenosDomesticos?.Extensao);
-    
-    // Som e Imagem
-    atualizarNegocioMetricas('som', 'Garantias', metricas.somImagem?.Garantias);
-    atualizarNegocioMetricas('som', 'ForaGarantia', metricas.somImagem?.ForaGarantia);
-    atualizarNegocioMetricas('som', 'Extensao', metricas.somImagem?.Extensao);
-    
-    // Entretenimento
-    atualizarNegocioMetricas('entretenimento', 'Garantias', metricas.entretenimento?.Garantias);
-    atualizarNegocioMetricas('entretenimento', 'ForaGarantia', metricas.entretenimento?.ForaGarantia);
-    atualizarNegocioMetricas('entretenimento', 'Extensao', metricas.entretenimento?.Extensao);
-    
-    // Rodapé
+    // Atualizar rodapé
     document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
-    document.getElementById('emAndamento').textContent = dadosBrutos.filter(d => d.tempo_reparo > 0).length;
-    document.getElementById('concluidasHoje').textContent = dadosBrutos.filter(d => {
-        if (!d.data_entrada) return false;
-        const hoje = new Date().toISOString().split('T')[0];
-        const dataStr = String(d.data_entrada).split('T')[0];
+    
+    const estadosAbertos = ['análise técnica', 'intervenção técnica', 'orçamento', 'aguarda aceitação orçamento'];
+    const emAberto = dadosBrutos.filter(item => 
+        estadosAbertos.some(estado => item.checkpoint.toLowerCase().includes(estado))
+    ).length;
+    document.getElementById('emAndamento').textContent = emAberto;
+    
+    const hoje = new Date().toISOString().split('T')[0];
+    const checkinsHoje = dadosBrutos.filter(item => {
+        if (!item.data_checkin) return false;
+        let dataStr;
+        if (typeof item.data_checkin === 'number') {
+            dataStr = new Date((item.data_checkin - 25569) * 86400 * 1000).toISOString().split('T')[0];
+        } else {
+            dataStr = new Date(item.data_checkin).toISOString().split('T')[0];
+        }
         return dataStr === hoje;
     }).length;
+    document.getElementById('concluidasHoje').textContent = checkinsHoje;
+    
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? 
         ultimaAtualizacao.toLocaleString('pt-PT') : '-';
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
+    
+    console.log('✅ Dashboard atualizado com os dados reais!');
 }
 
-// Função para atualizar um negócio com as novas métricas
-function atualizarNegocioMetricas(areaPrefix, negocio, stats) {
-    const prefix = areaPrefix === 'mobile' ? 'mobileDG' : 
-                   areaPrefix === 'pequenos' ? 'pequenos' : areaPrefix;
-    
-    if (!stats) stats = { analises:0, reparacoesGlobal:0, reparacoesPendentes:0, reparacoesNaoPendentes:0, tatAberto:0, orcamentos:0, aguardaAceitacao:0, debitosWSS:0 };
-    
-    // Mapear para os IDs existentes no HTML
-    // NOTA: Os IDs no HTML são: entradas, TAT, sucesso, NSS, prod
-    // Vamos reutilizá-los com os novos significados
-    
-    const entradas = document.getElementById(`${prefix}${negocio}Entradas`);
-    const tat = document.getElementById(`${prefix}${negocio}TAT`);
-    const sucesso = document.getElementById(`${prefix}${negocio}Sucesso`);
-    const nss = document.getElementById(`${prefix}${negocio}NSS`);
-    const prod = document.getElementById(`${prefix}${negocio}Prod`);
-    
-    if (entradas) {
-        // Análises
-        entradas.textContent = stats.analises || 0;
-        entradas.parentElement.querySelector('.mini-label').textContent = 'Análises';
-    }
-    
-    if (tat) {
-        // Reparações Global
-        tat.textContent = stats.reparacoesGlobal || 0;
-        tat.parentElement.querySelector('.mini-label').textContent = 'Rep.Global';
-    }
-    
-    if (sucesso) {
-        // Pendentes Peça
-        sucesso.textContent = stats.reparacoesPendentes || 0;
-        sucesso.parentElement.querySelector('.mini-label').textContent = 'Pend.Peça';
-    }
-    
-    if (nss) {
-        // TAT Aberto
-        nss.textContent = stats.tatAberto ? stats.tatAberto.toFixed(1) : '0';
-        nss.parentElement.querySelector('.mini-label').textContent = 'TAT Aberto';
-    }
-    
-    if (prod) {
-        // Orçamentos + Aguarda (temporário)
-        prod.textContent = (stats.orcamentos || 0) + ' | ' + (stats.aguardaAceitacao || 0);
-        prod.parentElement.querySelector('.mini-label').textContent = 'Orç|Aguarda';
-    }
-}
-
-// Dados de exemplo
+// Dados de exemplo (fallback)
 function carregarDadosExemplo() {
     dadosBrutos = [];
     const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
-    const negocios = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'];
+    const negociosLista = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
+    const checkpoints = ['Análise Técnica', 'Intervenção Técnica', 'Orçamento', 'Aguarda Aceitação Orçamento', 'Nível 3', 'Pré-Análise', 'Controlo de Qualidade', 'Debit'];
     
     for (let i = 1; i <= 200; i++) {
         const area = areas[Math.floor(Math.random() * areas.length)];
-        let negocio;
-        
-        if (area === 'Mobile D&G') {
-            negocio = 'D&G';
-        } else {
-            negocio = negocios[Math.floor(Math.random() * negocios.length)];
-        }
-        
+        const negocio = negociosLista[Math.floor(Math.random() * negociosLista.length)];
+        const checkpoint = checkpoints[Math.floor(Math.random() * checkpoints.length)];
         const data = new Date();
         data.setDate(data.getDate() - Math.floor(Math.random() * 30));
         
+        // Ajustar área para Mobile D&G quando negócio é D&G
+        let areaFinal = area;
+        if (negocio === 'D&G') {
+            areaFinal = 'Mobile D&G';
+        }
+        
         dadosBrutos.push({
             id: i,
-            area: area,
+            area: areaFinal,
             negocio: negocio,
-            data_entrada: data.toISOString().split('T')[0],
-            tempo_reparo: Math.random() * 8,
+            checkpoint: checkpoint,
             pendente_peca: Math.random() > 0.7,
-            aguarda_cotacao: Math.random() > 0.8,
-            is_orcamento: Math.random() > 0.9,
+            data_checkin: data,
+            tat: Math.random() * 15,
             polo: 'TSC South'
         });
     }
     
     ultimaAtualizacao = new Date();
-    atualizarInterface();
+    calcularEMostrarMetricas();
     console.log('✅ Dados de exemplo carregados');
 }
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard...');
-    
-    document.getElementById('btnAtualizar').addEventListener('click', () => {
-        document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> A atualizar...';
-        document.getElementById('fileInput').click();
-    });
-    
-    document.getElementById('periodoSelect').addEventListener('change', (e) => {
-        console.log('Período alterado:', e.target.value);
-        carregarDadosExemplo();
-    });
-    
-    carregarDadosExemplo();
-});
