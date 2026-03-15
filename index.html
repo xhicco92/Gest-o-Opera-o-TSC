@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5">
+    <title>Dashboard Centro Técnico</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Cabeçalho -->
+        <header class="dashboard-header">
+            <div class="header-title">
+                <h1>🔧 Centro Técnico - Painel de Monitorização</h1>
+                <span class="data-ref" id="dataReferencia">Carregando...</span>
+            </div>
+            <div class="header-controls">
+                <button id="btnAtualizar" class="btn-atualizar">
+                    <span class="material-icons">refresh</span>
+                    Atualizar
+                </button>
+                <select id="periodoSelect" class="select-periodo">
+                    <option value="hoje">Hoje</option>
+                    <option value="semana" selected>Esta Semana</option>
+                    <option value="mes">Este Mês</option>
+                    <option value="trimestre">Este Trimestre</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- KPIs Globais -->
+        <section class="kpis-globais">
+            <div class="kpi-card global">
+                <span class="kpi-icon material-icons">inventory</span>
+                <div class="kpi-content">
+                    <span class="kpi-label">Total Entradas</span>
+                    <span class="kpi-value" id="totalEntradas">-</span>
+                </div>
+            </div>
+            <div class="kpi-card global">
+                <span class="kpi-icon material-icons">schedule</span>
+                <div class="kpi-content">
+                    <span class="kpi-label">TAT Médio</span>
+                    <span class="kpi-value" id="tatMedio">-</span>
+                    <span class="kpi-unit">dias</span>
+                </div>
+            </div>
+            <div class="kpi-card global">
+                <span class="kpi-icon material-icons">check_circle</span>
+                <div class="kpi-content">
+                    <span class="kpi-label">Taxa Sucesso</span>
+                    <span class="kpi-value" id="taxaSucessoGlobal">-</span>
+                    <span class="kpi-unit">%</span>
+                </div>
+            </div>
+            <div class="kpi-card global">
+                <span class="kpi-icon material-icons">star</span>
+                <div class="kpi-content">
+                    <span class="kpi-label">NSS Médio</span>
+                    <span class="kpi-value" id="nssMedio">-</span>
+                    <span class="kpi-unit">/5</span>
+                </div>
+            </div>
+            <div class="kpi-card global">
+                <span class="kpi-icon material-icons">engineering</span>
+                <div class="kpi-content">
+                    <span class="kpi-label">Produtividade</span>
+                    <span class="kpi-value" id="produtividadeGlobal">-</span>
+                    <span class="kpi-unit">%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Áreas de Negócio -->
+        <div class="areas-grid">
+            <!-- Mobile Cliente -->
+            <div class="area-card">
+                <div class="area-header mobile-cliente">
+                    <h2>📱 Mobile Cliente</h2>
+                    <span class="area-total" id="totalMobileCliente">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge garantias">G</span>
+                            <span>Garantias</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="mobileClienteGarantiasEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="mobileClienteGarantiasTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="mobileClienteGarantiasSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="mobileClienteGarantiasNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="mobileClienteGarantiasProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge fora-garantia">FG</span>
+                            <span>Fora de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="mobileClienteForaGarantiaEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="mobileClienteForaGarantiaTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="mobileClienteForaGarantiaSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="mobileClienteForaGarantiaNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="mobileClienteForaGarantiaProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge extensao">EG</span>
+                            <span>Extensão de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="mobileClienteExtensaoEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="mobileClienteExtensaoTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="mobileClienteExtensaoSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="mobileClienteExtensaoNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="mobileClienteExtensaoProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile D&G -->
+            <div class="area-card">
+                <div class="area-header mobile-dg">
+                    <h2>📟 Mobile D&G</h2>
+                    <span class="area-total" id="totalMobileDG">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge dg">D&G</span>
+                            <span>Reparações</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="mobileDGEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="mobileDGTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="mobileDGSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="mobileDGNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="mobileDGProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informática -->
+            <div class="area-card">
+                <div class="area-header informatica">
+                    <h2>💻 Informática</h2>
+                    <span class="area-total" id="totalInformatica">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge garantias">G</span>
+                            <span>Garantias</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="informaticaGarantiasEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="informaticaGarantiasTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="informaticaGarantiasSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="informaticaGarantiasNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="informaticaGarantiasProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge fora-garantia">FG</span>
+                            <span>Fora de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="informaticaForaGarantiaEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="informaticaForaGarantiaTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="informaticaForaGarantiaSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="informaticaForaGarantiaNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="informaticaForaGarantiaProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge extensao">EG</span>
+                            <span>Extensão de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="informaticaExtensaoEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="informaticaExtensaoTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="informaticaExtensaoSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="informaticaExtensaoNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="informaticaExtensaoProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pequenos Domésticos -->
+            <div class="area-card">
+                <div class="area-header pequenos-domesticos">
+                    <h2>🔌 Pequenos Domésticos</h2>
+                    <span class="area-total" id="totalPequenosDomesticos">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge garantias">G</span>
+                            <span>Garantias</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="pequenosGarantiasEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="pequenosGarantiasTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="pequenosGarantiasSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="pequenosGarantiasNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="pequenosGarantiasProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge fora-garantia">FG</span>
+                            <span>Fora de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="pequenosForaGarantiaEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="pequenosForaGarantiaTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="pequenosForaGarantiaSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="pequenosForaGarantiaNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="pequenosForaGarantiaProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge extensao">EG</span>
+                            <span>Extensão de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="pequenosExtensaoEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="pequenosExtensaoTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="pequenosExtensaoSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="pequenosExtensaoNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="pequenosExtensaoProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Som e Imagem -->
+            <div class="area-card">
+                <div class="area-header som-imagem">
+                    <h2>🎵 Som e Imagem</h2>
+                    <span class="area-total" id="totalSomImagem">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge garantias">G</span>
+                            <span>Garantias</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="somGarantiasEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="somGarantiasTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="somGarantiasSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="somGarantiasNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="somGarantiasProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge fora-garantia">FG</span>
+                            <span>Fora de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="somForaGarantiaEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="somForaGarantiaTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="somForaGarantiaSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="somForaGarantiaNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="somForaGarantiaProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge extensao">EG</span>
+                            <span>Extensão de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="somExtensaoEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="somExtensaoTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="somExtensaoSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="somExtensaoNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="somExtensaoProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entretenimento -->
+            <div class="area-card">
+                <div class="area-header entretenimento">
+                    <h2>🎮 Entretenimento</h2>
+                    <span class="area-total" id="totalEntretenimento">0</span>
+                </div>
+                <div class="negocios-container">
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge garantias">G</span>
+                            <span>Garantias</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="entretenimentoGarantiasEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="entretenimentoGarantiasTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="entretenimentoGarantiasSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="entretenimentoGarantiasNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="entretenimentoGarantiasProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge fora-garantia">FG</span>
+                            <span>Fora de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="entretenimentoForaGarantiaEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="entretenimentoForaGarantiaTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="entretenimentoForaGarantiaSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="entretenimentoForaGarantiaNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="entretenimentoForaGarantiaProd">-</span></div>
+                        </div>
+                    </div>
+                    <div class="negocio-row">
+                        <div class="negocio-title">
+                            <span class="badge extensao">EG</span>
+                            <span>Extensão de Garantia</span>
+                        </div>
+                        <div class="negocio-kpis">
+                            <div class="mini-kpi"><span class="mini-label">Entradas</span><span class="mini-value" id="entretenimentoExtensaoEntradas">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">TAT</span><span class="mini-value" id="entretenimentoExtensaoTAT">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Sucesso</span><span class="mini-value" id="entretenimentoExtensaoSucesso">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">NSS</span><span class="mini-value" id="entretenimentoExtensaoNSS">-</span></div>
+                            <div class="mini-kpi"><span class="mini-label">Prod.</span><span class="mini-value" id="entretenimentoExtensaoProd">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rodapé -->
+        <footer class="dashboard-footer">
+            <div class="footer-stats">
+                <span><strong>Total reparações:</strong> <span id="totalReparacoes">-</span></span>
+                <span><strong>Em andamento:</strong> <span id="emAndamento">-</span></span>
+                <span><strong>Concluídas hoje:</strong> <span id="concluidasHoje">-</span></span>
+                <span><strong>Última atualização:</strong> <span id="ultimaAtualizacao">-</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
