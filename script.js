@@ -7,30 +7,38 @@ let cabecalhosOriginais = [];
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Inicializando dashboard...');
     
-    // Criar a estrutura das áreas
+    // Primeiro: criar a estrutura das áreas
     criarEstruturaAreas();
     
-    // Adicionar botão de upload
+    // Depois: adicionar botão de upload
     adicionarBotaoUpload();
     
-    // Botão de atualização
+    // Configurar botão de atualização
     document.getElementById('btnAtualizar').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
     
-    // Seletor de período
+    // Configurar seletor de período
     document.getElementById('periodoSelect').addEventListener('change', (e) => {
         console.log('Período alterado:', e.target.value);
         carregarDadosExemplo();
     });
     
-    // Carregar dados de exemplo inicialmente
-    carregarDadosExemplo();
+    // Por fim: carregar dados de exemplo (agora com a estrutura pronta)
+    setTimeout(() => {
+        carregarDadosExemplo();
+    }, 100); // Pequeno atraso para garantir que o HTML foi renderizado
 });
 
-// Função para criar a estrutura das áreas dinamicamente
+// Função para criar a estrutura das áreas
 function criarEstruturaAreas() {
     const areasGrid = document.getElementById('areasGrid');
+    if (!areasGrid) {
+        console.error('❌ Elemento areasGrid não encontrado!');
+        return;
+    }
+    
+    console.log('🔄 Criando estrutura das áreas...');
     
     const areas = [
         { id: 'mobileCliente', nome: '📱 Mobile Cliente', classe: 'mobile-cliente' },
@@ -83,13 +91,13 @@ function criarEstruturaAreas() {
         { id: 'Debitos', label: 'Débitos WSS' }
     ];
     
+    // Limpar conteúdo existente
     areasGrid.innerHTML = '';
     
     areas.forEach(area => {
         const areaCard = document.createElement('div');
         areaCard.className = 'area-card';
         
-        // Nome da área para o total
         const totalId = area.id === 'mobileDG' ? 'totalMobileDG' : 
                        `total${area.id.charAt(0).toUpperCase() + area.id.slice(1)}`;
         
@@ -135,12 +143,26 @@ function criarEstruturaAreas() {
         });
     });
     
-    console.log('✅ Estrutura de áreas criada');
+    console.log('✅ Estrutura de áreas criada com sucesso!');
+    
+    // Verificar se os IDs foram criados
+    const testId = 'mobileClienteGarantiasAnalises';
+    const testElement = document.getElementById(testId);
+    if (testElement) {
+        console.log('✅ IDs verificados - estrutura OK');
+    } else {
+        console.error('❌ Problema: IDs não foram criados corretamente');
+    }
 }
 
 // Adicionar botão de upload
 function adicionarBotaoUpload() {
     const headerControls = document.querySelector('.header-controls');
+    if (!headerControls) return;
+    
+    // Remover input existente se houver
+    const existingInput = document.getElementById('fileInput');
+    if (existingInput) existingInput.remove();
     
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -150,6 +172,7 @@ function adicionarBotaoUpload() {
     fileInput.addEventListener('change', handleFileUpload);
     
     headerControls.appendChild(fileInput);
+    console.log('✅ Botão de upload adicionado');
 }
 
 // Processar upload
@@ -453,6 +476,8 @@ function calcularMetricas() {
 
 // Função para mostrar métricas
 function calcularEMostrarMetricas() {
+    console.log('🔄 Atualizando dashboard com métricas...');
+    
     const metricas = calcularMetricas();
     console.log('📊 Métricas calculadas:', metricas);
     
@@ -469,6 +494,9 @@ function calcularEMostrarMetricas() {
         'Extensão de Garantia': 'Extensao',
         'D&G': 'DG'
     };
+    
+    let elementosEncontrados = 0;
+    let elementosTotal = 0;
     
     // Atualizar cada campo
     Object.keys(metricas).forEach(area => {
@@ -496,10 +524,15 @@ function calcularEMostrarMetricas() {
                 { id: `${prefix}${negocioId}Debitos`, valor: stats.debitos }
             ];
             
+            elementosTotal += campos.length;
+            
             campos.forEach(campo => {
                 const element = document.getElementById(campo.id);
                 if (element) {
                     element.textContent = campo.valor;
+                    elementosEncontrados++;
+                } else {
+                    console.log(`⚠️ Elemento não encontrado: ${campo.id}`);
                 }
             });
         });
@@ -512,6 +545,8 @@ function calcularEMostrarMetricas() {
             totalElement.textContent = totalArea;
         }
     });
+    
+    console.log(`📊 Elementos atualizados: ${elementosEncontrados}/${elementosTotal}`);
     
     // Calcular KPIs globais
     let totalAnalises = 0;
@@ -545,7 +580,7 @@ function calcularEMostrarMetricas() {
     ).length;
     document.getElementById('emAndamento').textContent = emAberto;
     
-    document.getElementById('concluidasHoje').textContent = '-'; // Simplificado
+    document.getElementById('concluidasHoje').textContent = '-';
     
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? 
         ultimaAtualizacao.toLocaleString('pt-PT') : '-';
@@ -556,6 +591,8 @@ function calcularEMostrarMetricas() {
 
 // Dados de exemplo
 function carregarDadosExemplo() {
+    console.log('🔄 Carregando dados de exemplo...');
+    
     dadosBrutos = [];
     const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
     const negociosLista = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
