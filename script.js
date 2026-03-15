@@ -376,50 +376,86 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
     return -1;
 }
 
-// Função para calcular as métricas
+// Função para calcular as métricas (CORRIGIDA)
 function calcularMetricas() {
+    // Mapeamento exato dos estados conforme especificado
     const estadosAnalise = ['análise técnica', 'analise tecnica', 'análise', 'analise'];
     const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'reparação', 'reparacao'];
-    const estadosTAT = ['análise técnica', 'analise tecnica', 'intervenção técnica', 'intervencao tecnica', 
-                       'orçamento', 'orcamento', 'aguarda aceitação orçamento', 'aguarda aceitacao orcamento',
-                       'nível 3', 'nivel 3', 'pré-análise', 'pre-analise', 'controlo de qualidade'];
+    const estadosTAT = [
+        'análise técnica', 'analise tecnica', 
+        'intervenção técnica', 'intervencao tecnica', 
+        'orçamento', 'orcamento', 
+        'aguarda aceitação orçamento', 'aguarda aceitacao orcamento',
+        'nível 3', 'nivel 3', 
+        'pré-análise', 'pre-analise', 
+        'controlo de qualidade'
+    ];
     const estadosOrcamento = ['orçamento', 'orcamento'];
     const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
     const estadosDebito = ['debit', 'débito', 'debito'];
 
-    const metricas = {};
-    
-    // Inicializar estrutura
-    const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
-    const negocios = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
-    
-    areas.forEach(area => {
-        metricas[area] = {};
-        negocios.forEach(negocio => {
-            metricas[area][negocio] = {
-                analises: 0,
-                reparacao: 0,
-                repPendentePeca: 0,
-                repNaoPendentePeca: 0,
-                somaTat: 0,
-                countTat: 0,
-                tatAberto: 0,
-                orcamento: 0,
-                agAceitacao: 0,
-                debitos: 0
-            };
+    // Inicializar métricas com zero
+    const metricas = {
+        'Mobile Cliente': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        },
+        'Mobile D&G': {
+            'D&G': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        },
+        'Informática': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        },
+        'Pequenos Domésticos': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        },
+        'Som e Imagem': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        },
+        'Entretenimento': {
+            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
+            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 }
+        }
+    };
+
+    // DEBUG: mostrar os primeiros registos para verificar
+    console.log('🔍 Processando registos. Amostra:');
+    dadosBrutos.slice(0, 5).forEach((item, i) => {
+        console.log(`Registo ${i}:`, {
+            area: item.area,
+            negocio: item.negocio,
+            checkpoint: item.checkpoint,
+            pendente_peca: item.pendente_peca,
+            tat: item.tat
         });
     });
 
-    // Processar registos
+    // Processar cada registo
     dadosBrutos.forEach(item => {
         const area = item.area;
         const negocio = item.negocio;
         
-        if (!metricas[area] || !metricas[area][negocio]) return;
+        // Verificar se a área e negócio existem na estrutura
+        if (!metricas[area] || !metricas[area][negocio]) {
+            console.log(`⚠️ Combinação ignorada: ${area} - ${negocio}`);
+            return;
+        }
         
         const stats = metricas[area][negocio];
-        const checkpoint = item.checkpoint;
+        const checkpoint = item.checkpoint.toLowerCase().trim();
+        
+        // DEBUG: mostrar alguns checkpoints para verificar
+        if (Math.random() < 0.01) { // 1% dos registos
+            console.log(`Checkpoint: "${checkpoint}"`);
+        }
         
         // Análises
         if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
@@ -436,7 +472,7 @@ function calcularMetricas() {
             }
         }
         
-        // TAT
+        // TAT Aberto (soma para cálculo da média)
         if (estadosTAT.some(estado => checkpoint.includes(estado))) {
             stats.somaTat += item.tat;
             stats.countTat++;
@@ -447,7 +483,7 @@ function calcularMetricas() {
             stats.orcamento++;
         }
         
-        // Aguarda
+        // Aguarda Aceitação
         if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
             stats.agAceitacao++;
         }
@@ -458,12 +494,17 @@ function calcularMetricas() {
         }
     });
 
-    // Calcular médias
-    areas.forEach(area => {
-        negocios.forEach(negocio => {
+    // Calcular médias do TAT
+    Object.keys(metricas).forEach(area => {
+        Object.keys(metricas[area]).forEach(negocio => {
             const stats = metricas[area][negocio];
             if (stats.countTat > 0) {
                 stats.tatAberto = Math.round((stats.somaTat / stats.countTat) * 10) / 10;
+            }
+            
+            // DEBUG: mostrar totais por área/negócio
+            if (stats.analises > 0) {
+                console.log(`📊 ${area} - ${negocio}: Análises=${stats.analises}, Reparação=${stats.reparacao}, TAT=${stats.tatAberto}`);
             }
         });
     });
