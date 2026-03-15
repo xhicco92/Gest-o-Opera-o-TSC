@@ -1,35 +1,30 @@
 // Configurações
 let dadosBrutos = [];
 let ultimaAtualizacao = null;
+let cabecalhosOriginais = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard com leitura de Excel...');
+    console.log('🚀 Inicializando dashboard com leitura da folha "Dados"...');
     
-    // Adicionar botão de upload à interface
     adicionarBotaoUpload();
     
-    // Botão de atualização (agora abre seletor de ficheiro)
     document.getElementById('btnAtualizar').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
     
-    // Seletor de período (por enquanto só afeta os dados de exemplo)
     document.getElementById('periodoSelect').addEventListener('change', (e) => {
         console.log('Período alterado:', e.target.value);
-        // Por enquanto, recarrega dados de exemplo
         carregarDadosExemplo();
     });
     
-    // Carregar dados de exemplo inicialmente
     carregarDadosExemplo();
 });
 
-// Função para adicionar botão de upload à interface
+// Adicionar botão de upload
 function adicionarBotaoUpload() {
     const headerControls = document.querySelector('.header-controls');
     
-    // Criar input de ficheiro escondido
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.id = 'fileInput';
@@ -37,11 +32,10 @@ function adicionarBotaoUpload() {
     fileInput.style.display = 'none';
     fileInput.addEventListener('change', handleFileUpload);
     
-    // Adicionar à página
     headerControls.appendChild(fileInput);
 }
 
-// Função para processar upload de ficheiro
+// Processar upload
 async function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -49,19 +43,13 @@ async function handleFileUpload(event) {
     console.log('📂 Ficheiro selecionado:', file.name);
     
     try {
-        // Mostrar indicador de carregamento
         document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> A processar...';
         
-        // Ler o ficheiro
         const data = await lerFicheiroExcel(file);
-        
-        // Processar os dados
         processarDadosExcel(data);
         
-        // Limpar input para permitir re-upload do mesmo ficheiro
         event.target.value = '';
         
-        // Atualizar timestamp
         ultimaAtualizacao = new Date();
         document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
         
@@ -75,7 +63,7 @@ async function handleFileUpload(event) {
     }
 }
 
-// Função para ler ficheiro Excel
+// Ler ficheiro Excel
 async function lerFicheiroExcel(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -85,12 +73,23 @@ async function lerFicheiroExcel(file) {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 
-                // Pega a primeira folha (assumimos que os dados estão lá)
-                const primeiraFolha = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[primeiraFolha];
+                // Verificar se a folha "Dados" existe
+                console.log('📑 Folhas disponíveis:', workbook.SheetNames);
                 
-                // Converte para JSON
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                if (!workbook.SheetNames.includes('Dados')) {
+                    console.log('⚠️ Folha "Dados" não encontrada. Usando primeira folha:', workbook.SheetNames[0]);
+                }
+                
+                // Usar folha "Dados" ou a primeira
+                const nomeFolha = workbook.SheetNames.includes('Dados') ? 'Dados' : workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[nomeFolha];
+                
+                // Converter para JSON mantendo cabeçalhos
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+                    header: 1,
+                    defval: '' // Valor padrão para células vazias
+                });
+                
                 resolve(jsonData);
                 
             } catch (erro) {
@@ -103,7 +102,7 @@ async function lerFicheiroExcel(file) {
     });
 }
 
-// Função para processar dados do Excel
+// Processar dados do Excel
 function processarDadosExcel(dados) {
     if (!dados || dados.length < 2) {
         console.log('⚠️ Ficheiro sem dados suficientes');
@@ -111,17 +110,22 @@ function processarDadosExcel(dados) {
         return;
     }
     
-    // A primeira linha são os cabeçalhos
+    // Primeira linha são os cabeçalhos
     const cabecalhos = dados[0];
+    cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Mapear índices das colunas importantes
-    const idxArea = encontrarIndice(cabecalhos, ['area', 'área', 'Area', 'Área']);
-    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'tipo garantia', 'Garantia', 'Tipo Garantia']);
-    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'data checkin', 'Data Entrada', 'data_entrada']);
-    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint atual', 'Checkpoint', 'Status']);
-    const idxTecnico = encontrarIndice(cabecalhos, ['utilizador', 'Utilizador', 'Técnico', 'tecnico']);
-    const idxEntidade = encontrarIndice(cabecalhos, ['entdade', 'entidade', 'Entidade', 'Cliente']);
+    // Mapear índices das colunas importantes (baseado nos nomes reais do Excel)
+    const idxArea = encontrarIndice(cabecalhos, ['area', 'área', 'Area', 'Área', 'polo']);
+    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'tipo garantia', 'Garantia', 'Tipo Garantia', 'garantia']);
+    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'data checkin', 'Data Entrada', 'data_entrada', 'checkin']);
+    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint atual', 'Checkpoint', 'Status', 'estado']);
+    const idxTecnico = encontrarIndice(cabecalhos, ['utilizador', 'Utilizador', 'Técnico', 'tecnico', 'responsavel']);
+    const idxEntidade = encontrarIndice(cabecalhos, ['entdade', 'entidade', 'Entidade', 'Cliente', 'entidade']);
+    const idxMarca = encontrarIndice(cabecalhos, ['marca', 'Marca', 'brand', 'marca']);
+    const idxModelo = encontrarIndice(cabecalhos, ['modelo', 'Modelo', 'model']);
+    const idxSn = encontrarIndice(cabecalhos, ['sn_equipamento', 'sn', 'número série', 'serial', 'imei']);
+    const idxId = encontrarIndice(cabecalhos, ['id_processo', 'id', 'processo', 'os', 'ordem']);
     
     console.log('📍 Mapeamento de colunas:', {
         area: idxArea,
@@ -129,30 +133,36 @@ function processarDadosExcel(dados) {
         data: idxData,
         checkpoint: idxCheckpoint,
         tecnico: idxTecnico,
-        entidade: idxEntidade
+        entidade: idxEntidade,
+        marca: idxMarca,
+        modelo: idxModelo,
+        sn: idxSn,
+        id: idxId
     });
     
-    // Processar linhas de dados
+    // Processar linhas de dados (a partir da linha 2)
     dadosBrutos = [];
     
     for (let i = 1; i < dados.length; i++) {
         const linha = dados[i];
         if (!linha || linha.length === 0) continue;
         
+        // Verificar se a linha tem conteúdo relevante
+        if (linha.every(cell => !cell || cell === '')) continue;
+        
         // Extrair valores
-        const area = idxArea !== -1 ? linha[idxArea] : 'Mobile Cliente';
-        const tipoGarantia = idxGarantia !== -1 ? linha[idxGarantia] : 'Garantias';
+        const area = idxArea !== -1 ? linha[idxArea] : '';
+        const tipoGarantia = idxGarantia !== -1 ? linha[idxGarantia] : '';
         const dataCheckin = idxData !== -1 ? linha[idxData] : null;
         const checkpoint = idxCheckpoint !== -1 ? linha[idxCheckpoint] : '';
-        const utilizador = idxTecnico !== -1 ? linha[idxTecnico] : 'Técnico';
+        const utilizador = idxTecnico !== -1 ? linha[idxTecnico] : '';
         const entidade = idxEntidade !== -1 ? linha[idxEntidade] : '';
+        const marca = idxMarca !== -1 ? linha[idxMarca] : '';
+        const modelo = idxModelo !== -1 ? linha[idxModelo] : '';
+        const sn = idxSn !== -1 ? linha[idxSn] : '';
+        const id = idxId !== -1 ? linha[idxId] : i;
         
-        // Filtrar entidades (como no Excel)
-        if (entidade === 'Recondicionado PT' || entidade === 'TSC') {
-            continue;
-        }
-        
-        // Determinar status
+        // Determinar status baseado no checkpoint
         let status = 'pendente';
         if (checkpoint) {
             const cp = String(checkpoint).toUpperCase();
@@ -163,55 +173,94 @@ function processarDadosExcel(dados) {
             }
         }
         
-        // Calcular TAT
+        // Calcular TAT (dias desde data_checkin até hoje)
         let tempoReparo = 0;
         if (dataCheckin) {
             try {
-                const dataEntrada = new Date(dataCheckin);
+                // Converter data do Excel (número ou string)
+                let dataEntrada;
+                if (typeof dataCheckin === 'number') {
+                    // Data do Excel (dias desde 1900)
+                    dataEntrada = new Date((dataCheckin - 25569) * 86400 * 1000);
+                } else {
+                    dataEntrada = new Date(dataCheckin);
+                }
+                
                 if (!isNaN(dataEntrada)) {
                     const hoje = new Date();
                     const diffTime = Math.abs(hoje - dataEntrada);
                     tempoReparo = diffTime / (1000 * 60 * 60 * 24);
                 }
             } catch (e) {
-                // Ignorar erros de data
+                console.log('Erro ao processar data:', dataCheckin);
             }
         }
         
         // Normalizar área
-        let areaNorm = String(area || 'Mobile Cliente');
-        if (areaNorm.includes('Mobile') || areaNorm.includes('TELEMOVEL')) areaNorm = 'Mobile Cliente';
-        else if (areaNorm.includes('D&G') || areaNorm.includes('DG')) areaNorm = 'Mobile D&G';
-        else if (areaNorm.includes('Informatica') || areaNorm.includes('PC') || areaNorm.includes('NOTEBOOK')) areaNorm = 'Informática';
-        else if (areaNorm.includes('Domestico') || areaNorm.includes('PDA') || areaNorm.includes('ELECTRODOMESTICO')) areaNorm = 'Pequenos Domésticos';
-        else if (areaNorm.includes('Som') || areaNorm.includes('Imagem') || areaNorm.includes('TV') || areaNorm.includes('AUDIO')) areaNorm = 'Som e Imagem';
-        else if (areaNorm.includes('Entretenimento') || areaNorm.includes('GAMING') || areaNorm.includes('CONSOLA')) areaNorm = 'Entretenimento';
+        let areaNorm = 'Outros';
+        const areaStr = String(area || '').toUpperCase();
+        
+        if (areaStr.includes('MOBILE') || areaStr.includes('TELEMOVEL') || areaStr.includes('CELULAR')) {
+            if (areaStr.includes('D&G') || areaStr.includes('DG')) {
+                areaNorm = 'Mobile D&G';
+            } else {
+                areaNorm = 'Mobile Cliente';
+            }
+        } else if (areaStr.includes('INFORMATICA') || areaStr.includes('PC') || areaStr.includes('NOTEBOOK') || areaStr.includes('COMPUTADOR')) {
+            areaNorm = 'Informática';
+        } else if (areaStr.includes('DOMESTICO') || areaStr.includes('PDA') || areaStr.includes('ELECTRODOMESTICO') || areaStr.includes('PEQUENO')) {
+            areaNorm = 'Pequenos Domésticos';
+        } else if (areaStr.includes('SOM') || areaStr.includes('IMAGEM') || areaStr.includes('TV') || areaStr.includes('AUDIO') || areaStr.includes('VIDEO')) {
+            areaNorm = 'Som e Imagem';
+        } else if (areaStr.includes('ENTRETENIMENTO') || areaStr.includes('GAMING') || areaStr.includes('CONSOLA') || areaStr.includes('PLAYSTATION')) {
+            areaNorm = 'Entretenimento';
+        } else if (areaStr) {
+            // Se tem valor mas não reconheceu, mantém original
+            areaNorm = String(area);
+        }
         
         // Normalizar negócio
         let negocioNorm = 'Garantias';
         const tg = String(tipoGarantia || '').toUpperCase();
-        if (tg.includes('FORA') || tg.includes('OUT OF')) negocioNorm = 'Fora de Garantia';
-        else if (tg.includes('EXTENSAO') || tg.includes('EXTENSION')) negocioNorm = 'Extensão de Garantia';
+        
+        if (tg.includes('FORA') || tg.includes('OUT OF') || tg.includes('PAGO') || tg.includes('NAO GARANTIA')) {
+            negocioNorm = 'Fora de Garantia';
+        } else if (tg.includes('EXTENSAO') || tg.includes('EXTENSION') || tg.includes('PROTECAO')) {
+            negocioNorm = 'Extensão de Garantia';
+        }
         
         // Ajustar para Mobile D&G
         if (areaNorm === 'Mobile D&G') {
             negocioNorm = 'D&G';
         }
         
+        // Determinar sucesso (aleatório por enquanto - depois podemos ajustar)
+        const sucesso = status === 'concluido' ? Math.random() > 0.1 : true;
+        
+        // Criar objeto com todos os dados
         dadosBrutos.push({
             id: dadosBrutos.length + 1,
+            id_original: id,
             area: areaNorm,
+            area_original: area,
             negocio: negocioNorm,
+            negocio_original: tipoGarantia,
             status: status,
-            data_entrada: dataCheckin ? String(dataCheckin).split('T')[0] : new Date().toISOString().split('T')[0],
-            tecnico: String(utilizador || 'Técnico'),
+            data_entrada: dataCheckin ? String(dataCheckin) : '',
+            tecnico: String(utilizador || 'Não atribuído'),
             tempo_reparo: Math.round(tempoReparo * 10) / 10,
             satisfacao: 4, // NSS não disponível
-            sucesso: status === 'concluido' && Math.random() > 0.1 // Simulação simples
+            sucesso: sucesso,
+            checkpoint: checkpoint,
+            marca: String(marca || ''),
+            modelo: String(modelo || ''),
+            sn: String(sn || ''),
+            entidade: String(entidade || '')
         });
     }
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos do Excel`);
+    console.log(`✅ Processados ${dadosBrutos.length} registos da folha "Dados"`);
+    console.log('📊 Primeiro registo processado:', dadosBrutos[0]);
     
     if (dadosBrutos.length > 0) {
         ultimaAtualizacao = new Date();
@@ -228,6 +277,7 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
         const cab = String(cabecalhos[i] || '').toLowerCase().trim();
         for (let nome of possiveisNomes) {
             if (cab.includes(nome.toLowerCase())) {
+                console.log(`✅ Coluna "${cabecalhos[i]}" corresponde a "${nome}" (índice ${i})`);
                 return i;
             }
         }
@@ -253,7 +303,8 @@ function calcularKPIs() {
             Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
         entretenimento: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
             ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } }
+            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
+        outros: { total: 0, Outros: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } }
     };
 
     const mapaAreas = {
@@ -262,17 +313,19 @@ function calcularKPIs() {
         'Informática': 'informatica',
         'Pequenos Domésticos': 'pequenosDomesticos',
         'Som e Imagem': 'somImagem',
-        'Entretenimento': 'entretenimento'
+        'Entretenimento': 'entretenimento',
+        'Outros': 'outros'
     };
 
     dadosBrutos.forEach(item => {
-        const area = mapaAreas[item.area] || 'mobileCliente';
+        const area = mapaAreas[item.area] || 'outros';
         let negocio = item.negocio;
         
         if (negocio && negocio.includes('Fora')) negocio = 'ForaGarantia';
         else if (negocio && negocio.includes('Extensão')) negocio = 'Extensao';
         else if (negocio && negocio.includes('Garantias')) negocio = 'Garantias';
         else if (area === 'mobileDG') negocio = 'DG';
+        else if (area === 'outros') negocio = 'Outros';
         
         if (kpis[area] && kpis[area][negocio]) {
             const stats = kpis[area][negocio];
@@ -303,7 +356,7 @@ function calcularKPIs() {
     return kpis;
 }
 
-// Função para atualizar a interface (mantida igual)
+// Função para atualizar a interface
 function atualizarInterface() {
     const kpis = calcularKPIs();
     
@@ -383,7 +436,7 @@ function atualizarNegocio(areaPrefix, negocio, stats) {
     if (prod) prod.textContent = stats?.produtividade || '0';
 }
 
-// Dados de exemplo (fallback)
+// Dados de exemplo
 function carregarDadosExemplo() {
     dadosBrutos = [];
     const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
