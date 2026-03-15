@@ -5,7 +5,7 @@ let cabecalhosOriginais = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard com leitura da folha "Dados"...');
+    console.log('🚀 Inicializando dashboard com nova estrutura...');
     
     adicionarBotaoUpload();
     
@@ -73,21 +73,19 @@ async function lerFicheiroExcel(file) {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 
-                // Verificar se a folha "Dados" existe
-                console.log('📑 Folhas disponíveis:', workbook.SheetNames);
-                
+                // Usar folha "Dados"
                 if (!workbook.SheetNames.includes('Dados')) {
-                    console.log('⚠️ Folha "Dados" não encontrada. Usando primeira folha:', workbook.SheetNames[0]);
+                    reject(new Error('Folha "Dados" não encontrada'));
+                    return;
                 }
                 
-                // Usar folha "Dados" ou a primeira
-                const nomeFolha = workbook.SheetNames.includes('Dados') ? 'Dados' : workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[nomeFolha];
+                const worksheet = workbook.Sheets['Dados'];
                 
-                // Converter para JSON mantendo cabeçalhos
+                // Converter para JSON
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
                     header: 1,
-                    defval: '' // Valor padrão para células vazias
+                    defval: '',
+                    range: 0 // Começa na linha 1
                 });
                 
                 resolve(jsonData);
@@ -110,174 +108,153 @@ function processarDadosExcel(dados) {
         return;
     }
     
-    // Primeira linha são os cabeçalhos
+    // Cabeçalhos na primeira linha
     const cabecalhos = dados[0];
     cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Mapear índices das colunas importantes (baseado nos nomes reais do Excel)
-    const idxArea = encontrarIndice(cabecalhos, ['area', 'área', 'Area', 'Área', 'polo']);
-    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'tipo garantia', 'Garantia', 'Tipo Garantia', 'garantia']);
-    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'data checkin', 'Data Entrada', 'data_entrada', 'checkin']);
-    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint atual', 'Checkpoint', 'Status', 'estado']);
-    const idxTecnico = encontrarIndice(cabecalhos, ['utilizador', 'Utilizador', 'Técnico', 'tecnico', 'responsavel']);
-    const idxEntidade = encontrarIndice(cabecalhos, ['entdade', 'entidade', 'Entidade', 'Cliente', 'entidade']);
-    const idxMarca = encontrarIndice(cabecalhos, ['marca', 'Marca', 'brand', 'marca']);
-    const idxModelo = encontrarIndice(cabecalhos, ['modelo', 'Modelo', 'model']);
-    const idxSn = encontrarIndice(cabecalhos, ['sn_equipamento', 'sn', 'número série', 'serial', 'imei']);
-    const idxId = encontrarIndice(cabecalhos, ['id_processo', 'id', 'processo', 'os', 'ordem']);
+    // Mapear índices
+    const idxPolo = encontrarIndice(cabecalhos, ['polo', 'Polo', 'unidade']);
+    const idxArea = encontrarIndice(cabecalhos, ['area', 'Área', 'departamento']);
+    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'garantia', 'Tipo Garantia']);
+    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'checkin', 'Data Entrada']);
+    const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça', 'aguarda peça']);
+    const idxAguardaCotacao = encontrarIndice(cabecalhos, ['aguarda_cotacao_de_peca', 'aguarda cotação', 'cotação']);
+    const idxTipoReparacao = encontrarIndice(cabecalhos, ['tipo_reparacao', 'Tipo Reparação']);
+    const idxStatus = encontrarIndice(cabecalhos, ['checkpoint_atual', 'status', 'Estado']);
     
-    console.log('📍 Mapeamento de colunas:', {
+    console.log('📍 Mapeamento:', {
+        polo: idxPolo,
         area: idxArea,
         garantia: idxGarantia,
         data: idxData,
-        checkpoint: idxCheckpoint,
-        tecnico: idxTecnico,
-        entidade: idxEntidade,
-        marca: idxMarca,
-        modelo: idxModelo,
-        sn: idxSn,
-        id: idxId
+        pendente_peca: idxPendentePeca,
+        aguarda_cotacao: idxAguardaCotacao,
+        tipo_reparacao: idxTipoReparacao,
+        status: idxStatus
     });
     
-    // Processar linhas de dados (a partir da linha 2)
+    // Processar dados (linhas a partir da 2)
     dadosBrutos = [];
     
     for (let i = 1; i < dados.length; i++) {
         const linha = dados[i];
         if (!linha || linha.length === 0) continue;
-        
-        // Verificar se a linha tem conteúdo relevante
         if (linha.every(cell => !cell || cell === '')) continue;
+        
+        // Filtrar apenas TSC South
+        const polo = idxPolo !== -1 ? String(linha[idxPolo] || '').toLowerCase() : '';
+        if (!polo.includes('tsc south') && !polo.includes('south')) {
+            continue;
+        }
         
         // Extrair valores
         const area = idxArea !== -1 ? linha[idxArea] : '';
         const tipoGarantia = idxGarantia !== -1 ? linha[idxGarantia] : '';
         const dataCheckin = idxData !== -1 ? linha[idxData] : null;
-        const checkpoint = idxCheckpoint !== -1 ? linha[idxCheckpoint] : '';
-        const utilizador = idxTecnico !== -1 ? linha[idxTecnico] : '';
-        const entidade = idxEntidade !== -1 ? linha[idxEntidade] : '';
-        const marca = idxMarca !== -1 ? linha[idxMarca] : '';
-        const modelo = idxModelo !== -1 ? linha[idxModelo] : '';
-        const sn = idxSn !== -1 ? linha[idxSn] : '';
-        const id = idxId !== -1 ? linha[idxId] : i;
+        const pendentePeca = idxPendentePeca !== -1 ? String(linha[idxPendentePeca] || '').toLowerCase() : '';
+        const aguardaCotacao = idxAguardaCotacao !== -1 ? String(linha[idxAguardaCotacao] || '').toLowerCase() : '';
+        const tipoReparacao = idxTipoReparacao !== -1 ? String(linha[idxTipoReparacao] || '').toLowerCase() : '';
+        const checkpoint = idxStatus !== -1 ? linha[idxStatus] : '';
         
-        // Determinar status baseado no checkpoint
+        // Determinar status
         let status = 'pendente';
         if (checkpoint) {
             const cp = String(checkpoint).toUpperCase();
-            if (cp.includes('FECHADO') || cp.includes('CONCLUIDO') || cp.includes('FINALIZADO')) {
+            if (cp.includes('FECHADO') || cp.includes('CONCLUIDO')) {
                 status = 'concluido';
-            } else if (cp.includes('REPARACAO') || cp.includes('ANALISE') || cp.includes('TRIAGEM')) {
+            } else if (cp.includes('REPARACAO') || cp.includes('ANALISE')) {
                 status = 'andamento';
             }
         }
         
-        // Calcular TAT (dias desde data_checkin até hoje)
+        // Calcular TAT
         let tempoReparo = 0;
         if (dataCheckin) {
             try {
-                // Converter data do Excel (número ou string)
                 let dataEntrada;
                 if (typeof dataCheckin === 'number') {
-                    // Data do Excel (dias desde 1900)
                     dataEntrada = new Date((dataCheckin - 25569) * 86400 * 1000);
                 } else {
                     dataEntrada = new Date(dataCheckin);
                 }
-                
                 if (!isNaN(dataEntrada)) {
                     const hoje = new Date();
-                    const diffTime = Math.abs(hoje - dataEntrada);
-                    tempoReparo = diffTime / (1000 * 60 * 60 * 24);
+                    tempoReparo = Math.abs(hoje - dataEntrada) / (1000 * 60 * 60 * 24);
                 }
-            } catch (e) {
-                console.log('Erro ao processar data:', dataCheckin);
-            }
+            } catch (e) {}
         }
         
-        // Normalizar área
+        // Normalizar área (igual ao anterior)
         let areaNorm = 'Outros';
         const areaStr = String(area || '').toUpperCase();
         
-        if (areaStr.includes('MOBILE') || areaStr.includes('TELEMOVEL') || areaStr.includes('CELULAR')) {
+        if (areaStr.includes('MOBILE') || areaStr.includes('TELEMOVEL')) {
             if (areaStr.includes('D&G') || areaStr.includes('DG')) {
                 areaNorm = 'Mobile D&G';
             } else {
                 areaNorm = 'Mobile Cliente';
             }
-        } else if (areaStr.includes('INFORMATICA') || areaStr.includes('PC') || areaStr.includes('NOTEBOOK') || areaStr.includes('COMPUTADOR')) {
+        } else if (areaStr.includes('INFORMATICA') || areaStr.includes('PC') || areaStr.includes('NOTEBOOK')) {
             areaNorm = 'Informática';
-        } else if (areaStr.includes('DOMESTICO') || areaStr.includes('PDA') || areaStr.includes('ELECTRODOMESTICO') || areaStr.includes('PEQUENO')) {
+        } else if (areaStr.includes('DOMESTICO') || areaStr.includes('PDA') || areaStr.includes('ELECTRO')) {
             areaNorm = 'Pequenos Domésticos';
-        } else if (areaStr.includes('SOM') || areaStr.includes('IMAGEM') || areaStr.includes('TV') || areaStr.includes('AUDIO') || areaStr.includes('VIDEO')) {
+        } else if (areaStr.includes('SOM') || areaStr.includes('IMAGEM') || areaStr.includes('TV') || areaStr.includes('AUDIO')) {
             areaNorm = 'Som e Imagem';
-        } else if (areaStr.includes('ENTRETENIMENTO') || areaStr.includes('GAMING') || areaStr.includes('CONSOLA') || areaStr.includes('PLAYSTATION')) {
+        } else if (areaStr.includes('ENTRETENIMENTO') || areaStr.includes('GAMING') || areaStr.includes('CONSOLA')) {
             areaNorm = 'Entretenimento';
-        } else if (areaStr) {
-            // Se tem valor mas não reconheceu, mantém original
-            areaNorm = String(area);
         }
         
         // Normalizar negócio
         let negocioNorm = 'Garantias';
         const tg = String(tipoGarantia || '').toUpperCase();
-        
-        if (tg.includes('FORA') || tg.includes('OUT OF') || tg.includes('PAGO') || tg.includes('NAO GARANTIA')) {
+        if (tg.includes('FORA') || tg.includes('PAGO')) {
             negocioNorm = 'Fora de Garantia';
-        } else if (tg.includes('EXTENSAO') || tg.includes('EXTENSION') || tg.includes('PROTECAO')) {
+        } else if (tg.includes('EXTENSAO') || tg.includes('PROTECAO')) {
             negocioNorm = 'Extensão de Garantia';
         }
         
-        // Ajustar para Mobile D&G
         if (areaNorm === 'Mobile D&G') {
             negocioNorm = 'D&G';
         }
         
-        // Determinar sucesso (aleatório por enquanto - depois podemos ajustar)
-        const sucesso = status === 'concluido' ? Math.random() > 0.1 : true;
+        // Mapear flags
+        const isPendentePeca = pendentePeca.includes('sim') || pendentePeca.includes('s') || pendentePeca === '1';
+        const isAguardaCotacao = aguardaCotacao.includes('sim') || aguardaCotacao.includes('s') || aguardaCotacao === '1';
+        const isOrcamento = tipoReparacao.includes('orcamento') || tipoReparacao.includes('orçamento');
         
-        // Criar objeto com todos os dados
         dadosBrutos.push({
             id: dadosBrutos.length + 1,
-            id_original: id,
             area: areaNorm,
-            area_original: area,
             negocio: negocioNorm,
-            negocio_original: tipoGarantia,
             status: status,
-            data_entrada: dataCheckin ? String(dataCheckin) : '',
-            tecnico: String(utilizador || 'Não atribuído'),
+            data_entrada: dataCheckin,
             tempo_reparo: Math.round(tempoReparo * 10) / 10,
-            satisfacao: 4, // NSS não disponível
-            sucesso: sucesso,
+            pendente_peca: isPendentePeca,
+            aguarda_cotacao: isAguardaCotacao,
+            is_orcamento: isOrcamento,
+            tipo_garantia: tipoGarantia,
             checkpoint: checkpoint,
-            marca: String(marca || ''),
-            modelo: String(modelo || ''),
-            sn: String(sn || ''),
-            entidade: String(entidade || '')
+            polo: polo
         });
     }
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos da folha "Dados"`);
-    console.log('📊 Primeiro registo processado:', dadosBrutos[0]);
+    console.log(`✅ Processados ${dadosBrutos.length} registos (TSC South apenas)`);
     
     if (dadosBrutos.length > 0) {
         ultimaAtualizacao = new Date();
         atualizarInterface();
     } else {
-        console.log('⚠️ Nenhum registo válido encontrado');
         carregarDadosExemplo();
     }
 }
 
-// Função auxiliar para encontrar índice de coluna
+// Função auxiliar para encontrar índice
 function encontrarIndice(cabecalhos, possiveisNomes) {
     for (let i = 0; i < cabecalhos.length; i++) {
         const cab = String(cabecalhos[i] || '').toLowerCase().trim();
         for (let nome of possiveisNomes) {
             if (cab.includes(nome.toLowerCase())) {
-                console.log(`✅ Coluna "${cabecalhos[i]}" corresponde a "${nome}" (índice ${i})`);
                 return i;
             }
         }
@@ -285,26 +262,86 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
     return -1;
 }
 
-// Função para calcular KPIs (igual às versões anteriores)
-function calcularKPIs() {
-    const kpis = {
-        mobileCliente: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        mobileDG: { total: 0, DG: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        informatica: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        pequenosDomesticos: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        somImagem: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        entretenimento: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            ForaGarantia: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
-            Extensao: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } },
-        outros: { total: 0, Outros: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 } }
+// Função para calcular todas as métricas
+function calcularMetricas() {
+    const metricas = {
+        mobileCliente: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        mobileDG: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        informatica: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        pequenosDomesticos: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        somImagem: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        entretenimento: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        },
+        outros: { 
+            global: 0,
+            analises: { Garantias:0, ForaGarantia:0, Extensao:0 },
+            reparacoes: { global:0, pendentesPeca:0, naoPendentesPeca:0 },
+            tatAberto: 0,
+            orcamentos: 0,
+            aguardaAceitacao: 0,
+            debitosWSS: 0,
+            somaTat: 0,
+            countTat: 0
+        }
     };
 
     const mapaAreas = {
@@ -317,131 +354,91 @@ function calcularKPIs() {
         'Outros': 'outros'
     };
 
+    // Processar cada registo
     dadosBrutos.forEach(item => {
-        const area = mapaAreas[item.area] || 'outros';
-        let negocio = item.negocio;
+        const areaKey = mapaAreas[item.area] || 'outros';
+        const area = metricas[areaKey];
         
-        if (negocio && negocio.includes('Fora')) negocio = 'ForaGarantia';
-        else if (negocio && negocio.includes('Extensão')) negocio = 'Extensao';
-        else if (negocio && negocio.includes('Garantias')) negocio = 'Garantias';
-        else if (area === 'mobileDG') negocio = 'DG';
-        else if (area === 'outros') negocio = 'Outros';
+        // Global
+        area.global++;
         
-        if (kpis[area] && kpis[area][negocio]) {
-            const stats = kpis[area][negocio];
-            stats.entradas++;
-            kpis[area].total++;
-            
-            if (item.tempo_reparo) stats.somaTat += item.tempo_reparo;
-            if (item.satisfacao) stats.somaNss += item.satisfacao;
-            if (item.sucesso) stats.countSucesso++;
-            if (item.sucesso && item.tempo_reparo) stats.countProd++;
+        // Análises por tipo de garantia
+        if (item.negocio === 'Garantias') area.analises.Garantias++;
+        else if (item.negocio === 'Fora de Garantia') area.analises.ForaGarantia++;
+        else if (item.negocio === 'Extensão de Garantia') area.analises.Extensao++;
+        else if (item.negocio === 'D&G') area.analises.Garantias++; // D&G conta como Garantias
+        
+        // Reparações
+        if (item.status !== 'concluido') {
+            area.reparacoes.global++;
+            if (item.pendente_peca) {
+                area.reparacoes.pendentesPeca++;
+            } else {
+                area.reparacoes.naoPendentesPeca++;
+            }
+        }
+        
+        // TAT Aberto
+        if (item.tempo_reparo > 0) {
+            area.somaTat += item.tempo_reparo;
+            area.countTat++;
+        }
+        
+        // Orçamentos
+        if (item.is_orcamento) {
+            area.orcamentos++;
+        }
+        
+        // Aguarda Aceitação (pendente_peca + aguarda_cotacao)
+        if (item.aguarda_cotacao) {
+            area.aguardaAceitacao++;
+        }
+        
+        // Débitos WSS (por definir - talvez todos os registos?)
+        area.debitosWSS = area.global; // Temporário
+    });
+
+    // Calcular médias
+    Object.keys(metricas).forEach(key => {
+        const area = metricas[key];
+        if (area.countTat > 0) {
+            area.tatAberto = Math.round((area.somaTat / area.countTat) * 10) / 10;
         }
     });
 
-    Object.keys(kpis).forEach(area => {
-        Object.keys(kpis[area]).forEach(neg => {
-            if (neg !== 'total' && typeof kpis[area][neg] === 'object') {
-                const stats = kpis[area][neg];
-                if (stats.entradas > 0) {
-                    stats.tat = Math.round((stats.somaTat / stats.entradas) * 10) / 10;
-                    stats.nss = Math.round((stats.somaNss / stats.entradas) * 10) / 10;
-                    stats.sucesso = Math.round((stats.countSucesso / stats.entradas) * 100);
-                    stats.produtividade = Math.round((stats.countProd / stats.entradas) * 100);
-                }
-            }
-        });
-    });
-
-    return kpis;
+    return metricas;
 }
 
-// Função para atualizar a interface
+// Função para atualizar a interface com a nova estrutura
 function atualizarInterface() {
-    const kpis = calcularKPIs();
+    const metricas = calcularMetricas();
+    console.log('📊 Métricas calculadas:', metricas);
     
-    let totalEntradas = 0, somaTat = 0, somaSucesso = 0, somaNss = 0, somaProd = 0, count = 0;
+    // Atualizar totais por área
+    document.getElementById('totalMobileCliente').textContent = metricas.mobileCliente.global;
+    document.getElementById('totalMobileDG').textContent = metricas.mobileDG.global;
+    document.getElementById('totalInformatica').textContent = metricas.informatica.global;
+    document.getElementById('totalPequenosDomesticos').textContent = metricas.pequenosDomesticos.global;
+    document.getElementById('totalSomImagem').textContent = metricas.somImagem.global;
+    document.getElementById('totalEntretenimento').textContent = metricas.entretenimento.global;
     
-    Object.values(kpis).forEach(area => {
-        totalEntradas += area.total || 0;
-        Object.keys(area).forEach(neg => {
-            if (neg !== 'total' && typeof area[neg] === 'object') {
-                const stats = area[neg];
-                if (stats.entradas > 0) {
-                    somaTat += stats.tat * stats.entradas;
-                    somaSucesso += stats.sucesso * stats.entradas;
-                    somaNss += stats.nss * stats.entradas;
-                    somaProd += stats.produtividade * stats.entradas;
-                    count += stats.entradas;
-                }
-            }
-        });
-    });
+    // Para cada área, atualizar os novos campos
+    // NOTA: Precisamos de adicionar novos elementos HTML para mostrar estes dados
+    // Por enquanto, mostramos no console
     
-    document.getElementById('totalEntradas').textContent = totalEntradas;
-    document.getElementById('tatMedio').textContent = count > 0 ? (somaTat / count).toFixed(1) : '0';
-    document.getElementById('taxaSucessoGlobal').textContent = count > 0 ? Math.round(somaSucesso / count) : '0';
-    document.getElementById('nssMedio').textContent = count > 0 ? (somaNss / count).toFixed(1) : '0';
-    document.getElementById('produtividadeGlobal').textContent = count > 0 ? Math.round(somaProd / count) : '0';
+    // Atualizar KPIs globais
+    let totalGeral = 0;
+    Object.values(metricas).forEach(area => totalGeral += area.global);
+    document.getElementById('totalEntradas').textContent = totalGeral;
     
-    document.getElementById('totalMobileCliente').textContent = kpis.mobileCliente?.total || 0;
-    document.getElementById('totalMobileDG').textContent = kpis.mobileDG?.total || 0;
-    document.getElementById('totalInformatica').textContent = kpis.informatica?.total || 0;
-    document.getElementById('totalPequenosDomesticos').textContent = kpis.pequenosDomesticos?.total || 0;
-    document.getElementById('totalSomImagem').textContent = kpis.somImagem?.total || 0;
-    document.getElementById('totalEntretenimento').textContent = kpis.entretenimento?.total || 0;
-    
-    atualizarNegocio('mobileCliente', 'Garantias', kpis.mobileCliente?.Garantias);
-    atualizarNegocio('mobileCliente', 'ForaGarantia', kpis.mobileCliente?.ForaGarantia);
-    atualizarNegocio('mobileCliente', 'Extensao', kpis.mobileCliente?.Extensao);
-    atualizarNegocio('mobile', 'DG', kpis.mobileDG?.DG);
-    atualizarNegocio('informatica', 'Garantias', kpis.informatica?.Garantias);
-    atualizarNegocio('informatica', 'ForaGarantia', kpis.informatica?.ForaGarantia);
-    atualizarNegocio('informatica', 'Extensao', kpis.informatica?.Extensao);
-    atualizarNegocio('pequenos', 'Garantias', kpis.pequenosDomesticos?.Garantias);
-    atualizarNegocio('pequenos', 'ForaGarantia', kpis.pequenosDomesticos?.ForaGarantia);
-    atualizarNegocio('pequenos', 'Extensao', kpis.pequenosDomesticos?.Extensao);
-    atualizarNegocio('som', 'Garantias', kpis.somImagem?.Garantias);
-    atualizarNegocio('som', 'ForaGarantia', kpis.somImagem?.ForaGarantia);
-    atualizarNegocio('som', 'Extensao', kpis.somImagem?.Extensao);
-    atualizarNegocio('entretenimento', 'Garantias', kpis.entretenimento?.Garantias);
-    atualizarNegocio('entretenimento', 'ForaGarantia', kpis.entretenimento?.ForaGarantia);
-    atualizarNegocio('entretenimento', 'Extensao', kpis.entretenimento?.Extensao);
-    
-    document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
-    document.getElementById('emAndamento').textContent = dadosBrutos.filter(d => d.status !== 'concluido').length;
-    document.getElementById('concluidasHoje').textContent = dadosBrutos.filter(d => {
-        const hoje = new Date().toISOString().split('T')[0];
-        return d.data_entrada === hoje && d.status === 'concluido';
-    }).length;
-    document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? 
-        ultimaAtualizacao.toLocaleString('pt-PT') : '-';
-    document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
+    console.log('✅ Interface atualizada com novas métricas');
 }
 
-function atualizarNegocio(areaPrefix, negocio, stats) {
-    const prefix = areaPrefix === 'mobile' ? 'mobileDG' : 
-                   areaPrefix === 'pequenos' ? 'pequenos' : areaPrefix;
-    
-    const entradas = document.getElementById(`${prefix}${negocio}Entradas`);
-    const tat = document.getElementById(`${prefix}${negocio}TAT`);
-    const sucesso = document.getElementById(`${prefix}${negocio}Sucesso`);
-    const nss = document.getElementById(`${prefix}${negocio}NSS`);
-    const prod = document.getElementById(`${prefix}${negocio}Prod`);
-    
-    if (entradas) entradas.textContent = stats?.entradas || '0';
-    if (tat) tat.textContent = stats?.tat ? stats.tat.toFixed(1) : '0';
-    if (sucesso) sucesso.textContent = stats?.sucesso || '0';
-    if (nss) nss.textContent = stats?.nss ? stats.nss.toFixed(1) : '0';
-    if (prod) prod.textContent = stats?.produtividade || '0';
-}
-
-// Dados de exemplo
+// Dados de exemplo (fallback)
 function carregarDadosExemplo() {
     dadosBrutos = [];
     const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
     const negocios = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'];
-    const tecnicos = ['João Silva', 'Maria Santos', 'Pedro Oliveira', 'Ana Costa'];
     
     for (let i = 1; i <= 200; i++) {
         const area = areas[Math.floor(Math.random() * areas.length)];
@@ -462,10 +459,11 @@ function carregarDadosExemplo() {
             negocio: negocio,
             status: Math.random() > 0.3 ? 'concluido' : (Math.random() > 0.5 ? 'andamento' : 'pendente'),
             data_entrada: data.toISOString().split('T')[0],
-            tecnico: tecnicos[Math.floor(Math.random() * tecnicos.length)],
             tempo_reparo: Math.random() * 8,
-            satisfacao: Math.floor(Math.random() * 2) + 4,
-            sucesso: Math.random() > 0.1
+            pendente_peca: Math.random() > 0.7,
+            aguarda_cotacao: Math.random() > 0.8,
+            is_orcamento: Math.random() > 0.9,
+            polo: 'TSC South'
         });
     }
     
