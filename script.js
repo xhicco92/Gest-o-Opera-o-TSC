@@ -1,322 +1,241 @@
-// CONFIGURAÇÕES
-const USERNAME = 'francisco.moreira@worten.pt';
-const PASSWORD = 'Alice311020***';
-const API_URL = 'https://reportingwss.noshape.com/ServiceV3.asmx/TSC_OrsAbertasEmCadaCheckpoint';
-const PROXY_URL = 'https://cors-anywhere.herokuapp.com/';
-
-// Estado
+// Configurações
 let dadosBrutos = [];
 let ultimaAtualizacao = null;
 
-// Função para buscar dados
-async function buscarDadosAPI() {
-    try {
-        console.log('🔄 Buscando dados da API (formato Excel)...');
-        
-        // Calcular datas (últimos 30 dias)
-        const dataFim = new Date();
-        const dataIni = new Date();
-        dataIni.setDate(dataIni.getDate() - 30);
-        
-        // Formatar datas como ISO (igual ao Excel)
-        const dataIniStr = dataIni.toISOString().split('T')[0];
-        const dataFimStr = dataFim.toISOString().split('T')[0];
-        
-        console.log(`📅 Período: ${dataIniStr} a ${dataFimStr}`);
-        
-        const corpo = new URLSearchParams({
-            'UserName': USERNAME,
-            'Password': PASSWORD,
-            'dataIni': dataIniStr,
-            'dataFim': dataFimStr
-        });
-        
-        // Fazer pedido via proxy
-        const resposta = await fetch(PROXY_URL + API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/vnd.ms-excel, application/xml, text/xml',
-                'User-Agent': 'Microsoft Excel/16.0'
-            },
-            body: corpo.toString()
-        });
-        
-        if (!resposta.ok) {
-            throw new Error(`HTTP ${resposta.status}`);
-        }
-        
-        // Obter resposta como texto (vai ser XML/Excel)
-        const conteudo = await resposta.text();
-        console.log('✅ Resposta recebida, tamanho:', conteudo.length, 'caracteres');
-        
-        // Verificar se é um erro conhecido
-        if (conteudo.includes('Unauthorized')) {
-            throw new Error('Acesso não autorizado - verifique permissões');
-        }
-        
-        // Processar o conteúdo como Excel/XML
-        processarConteudoExcel(conteudo);
-        
-    } catch (erro) {
-        console.error('❌ Erro:', erro);
-        
-        // Mostrar aviso com instruções
-        if (!document.querySelector('.proxy-aviso')) {
-            const aviso = document.createElement('div');
-            aviso.className = 'proxy-aviso';
-            aviso.innerHTML = `
-                <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:5px; margin:10px 0; border:1px solid #ffeeba;">
-                    ⚠️ Erro: ${erro.message}<br>
-                    <strong>Instruções:</strong><br>
-                    1. <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">Clique aqui</a> e peça acesso temporário ao proxy<br>
-                    2. Depois volte e clique em "Atualizar"<br>
-                    3. Se o erro persistir, contacte o IT sobre permissões para o método TSC_OrsAbertasEmCadaCheckpoint
-                </div>
-            `;
-            document.querySelector('.dashboard-header').appendChild(aviso);
-        }
-        
+// Inicialização
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Inicializando dashboard com leitura de Excel...');
+    
+    // Adicionar botão de upload à interface
+    adicionarBotaoUpload();
+    
+    // Botão de atualização (agora abre seletor de ficheiro)
+    document.getElementById('btnAtualizar').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
+    
+    // Seletor de período (por enquanto só afeta os dados de exemplo)
+    document.getElementById('periodoSelect').addEventListener('change', (e) => {
+        console.log('Período alterado:', e.target.value);
+        // Por enquanto, recarrega dados de exemplo
         carregarDadosExemplo();
-    }
+    });
+    
+    // Carregar dados de exemplo inicialmente
+    carregarDadosExemplo();
+});
+
+// Função para adicionar botão de upload à interface
+function adicionarBotaoUpload() {
+    const headerControls = document.querySelector('.header-controls');
+    
+    // Criar input de ficheiro escondido
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'fileInput';
+    fileInput.accept = '.xlsx, .xls, .csv';
+    fileInput.style.display = 'none';
+    fileInput.addEventListener('change', handleFileUpload);
+    
+    // Adicionar à página
+    headerControls.appendChild(fileInput);
 }
 
-// Função para processar conteúdo Excel/XML
-function processarConteudoExcel(conteudo) {
+// Função para processar upload de ficheiro
+async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    console.log('📂 Ficheiro selecionado:', file.name);
+    
     try {
-        // Parse do XML
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(conteudo, 'text/xml');
+        // Mostrar indicador de carregamento
+        document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> A processar...';
         
-        // Verificar se é um ficheiro Excel (tem Workbook/Worksheet)
-        const sheets = xmlDoc.getElementsByTagName('Worksheet');
-        const rows = xmlDoc.getElementsByTagName('Row');
+        // Ler o ficheiro
+        const data = await lerFicheiroExcel(file);
         
-        console.log('📊 Estrutura do documento:');
-        console.log('- Worksheets:', sheets.length);
-        console.log('- Rows:', rows.length);
+        // Processar os dados
+        processarDadosExcel(data);
         
-        // Procurar pelos dados - podem estar em diferentes formatos
-        let dadosEncontrados = false;
+        // Limpar input para permitir re-upload do mesmo ficheiro
+        event.target.value = '';
         
-        // Formato 1: Tabelas HTML/XML
-        const tabelas = xmlDoc.getElementsByTagName('Table');
-        if (tabelas.length > 0) {
-            console.log('✅ Encontradas', tabelas.length, 'tabelas');
-            dadosEncontrados = extrairDadosTabelas(tabelas, xmlDoc);
-        }
-        
-        // Formato 2: Linhas diretamente
-        if (!dadosEncontrados && rows.length > 0) {
-            console.log('✅ Encontradas', rows.length, 'linhas');
-            dadosEncontrados = extrairDadosLinhas(rows);
-        }
-        
-        // Formato 3: Registos XML (Table do ADO.NET)
-        if (!dadosEncontrados) {
-            const registos = xmlDoc.getElementsByTagName('Table');
-            if (registos.length > 0) {
-                console.log('✅ Encontrados', registos.length, 'registos');
-                dadosEncontrados = extrairDadosRegistos(registos);
-            }
-        }
-        
-        if (!dadosEncontrados) {
-            throw new Error('Não foi possível extrair dados do formato recebido');
-        }
-        
+        // Atualizar timestamp
         ultimaAtualizacao = new Date();
-        atualizarInterface();
-        console.log('✅ Dashboard atualizado com sucesso!');
+        document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
+        
+        console.log('✅ Dados processados com sucesso!');
         
     } catch (erro) {
-        console.error('❌ Erro ao processar Excel/XML:', erro);
-        console.log('Primeiros 500 caracteres do conteúdo:', conteudo.substring(0, 500));
-        carregarDadosExemplo();
+        console.error('❌ Erro ao processar ficheiro:', erro);
+        alert('Erro ao processar o ficheiro. Certifique-se que é um Excel válido.');
+    } finally {
+        document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> Carregar Excel';
     }
 }
 
-// Função para extrair dados de tabelas
-function extrairDadosTabelas(tabelas, xmlDoc) {
-    try {
-        // Procurar pela primeira tabela com dados
-        for (let tabela of tabelas) {
-            const linhas = tabela.getElementsByTagName('Row');
-            if (linhas.length > 1) { // Tem cabeçalho + dados
-                console.log(`📋 Tabela com ${linhas.length} linhas`);
+// Função para ler ficheiro Excel
+async function lerFicheiroExcel(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
                 
-                // Extrair cabeçalhos (primeira linha)
-                const celulasCabecalho = linhas[0].getElementsByTagName('Cell');
-                const cabecalhos = Array.from(celulasCabecalho).map(cell => {
-                    const data = cell.getElementsByTagName('Data')[0];
-                    return data ? data.textContent : '';
-                });
+                // Pega a primeira folha (assumimos que os dados estão lá)
+                const primeiraFolha = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[primeiraFolha];
                 
-                console.log('📌 Cabeçalhos:', cabecalhos);
+                // Converte para JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                resolve(jsonData);
                 
-                // Extrair dados (restantes linhas)
-                dadosBrutos = [];
-                for (let i = 1; i < linhas.length; i++) {
-                    const celulas = linhas[i].getElementsByTagName('Cell');
-                    const linha = {};
-                    
-                    Array.from(celulas).forEach((cell, idx) => {
-                        if (idx < cabecalhos.length) {
-                            const data = cell.getElementsByTagName('Data')[0];
-                            linha[cabecalhos[idx]] = data ? data.textContent : '';
-                        }
-                    });
-                    
-                    // Converter para formato do dashboard
-                    const item = converterLinhaParaFormato(linha, i);
-                    if (item) dadosBrutos.push(item);
-                }
-                
-                return dadosBrutos.length > 0;
+            } catch (erro) {
+                reject(erro);
             }
-        }
-    } catch (e) {
-        console.log('Erro ao extrair tabelas:', e);
-    }
-    return false;
+        };
+        
+        reader.onerror = (erro) => reject(erro);
+        reader.readAsArrayBuffer(file);
+    });
 }
 
-// Função para extrair dados de linhas
-function extrairDadosLinhas(rows) {
-    try {
-        if (rows.length < 2) return false;
-        
-        // Primeira linha são cabeçalhos
-        const celulasCabecalho = rows[0].getElementsByTagName('Cell');
-        const cabecalhos = Array.from(celulasCabecalho).map(cell => {
-            const data = cell.getElementsByTagName('Data')[0];
-            return data ? data.textContent : '';
-        });
-        
-        dadosBrutos = [];
-        for (let i = 1; i < rows.length; i++) {
-            const celulas = rows[i].getElementsByTagName('Cell');
-            const linha = {};
-            
-            Array.from(celulas).forEach((cell, idx) => {
-                if (idx < cabecalhos.length) {
-                    const data = cell.getElementsByTagName('Data')[0];
-                    linha[cabecalhos[idx]] = data ? data.textContent : '';
-                }
-            });
-            
-            const item = converterLinhaParaFormato(linha, i);
-            if (item) dadosBrutos.push(item);
-        }
-        
-        return dadosBrutos.length > 0;
-    } catch (e) {
-        console.log('Erro ao extrair linhas:', e);
-        return false;
+// Função para processar dados do Excel
+function processarDadosExcel(dados) {
+    if (!dados || dados.length < 2) {
+        console.log('⚠️ Ficheiro sem dados suficientes');
+        carregarDadosExemplo();
+        return;
     }
-}
-
-// Função para extrair dados de registos XML
-function extrairDadosRegistos(registos) {
-    try {
-        dadosBrutos = Array.from(registos).map((reg, idx) => {
-            const linha = {};
-            
-            // Extrair todos os campos do registo
-            Array.from(reg.children).forEach(child => {
-                linha[child.tagName] = child.textContent;
-            });
-            
-            return converterLinhaParaFormato(linha, idx);
-        }).filter(item => item !== null);
+    
+    // A primeira linha são os cabeçalhos
+    const cabecalhos = dados[0];
+    console.log('📊 Cabeçalhos encontrados:', cabecalhos);
+    
+    // Mapear índices das colunas importantes
+    const idxArea = encontrarIndice(cabecalhos, ['area', 'área', 'Area', 'Área']);
+    const idxGarantia = encontrarIndice(cabecalhos, ['tipo_garantia', 'tipo garantia', 'Garantia', 'Tipo Garantia']);
+    const idxData = encontrarIndice(cabecalhos, ['data_checkin', 'data checkin', 'Data Entrada', 'data_entrada']);
+    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint atual', 'Checkpoint', 'Status']);
+    const idxTecnico = encontrarIndice(cabecalhos, ['utilizador', 'Utilizador', 'Técnico', 'tecnico']);
+    const idxEntidade = encontrarIndice(cabecalhos, ['entdade', 'entidade', 'Entidade', 'Cliente']);
+    
+    console.log('📍 Mapeamento de colunas:', {
+        area: idxArea,
+        garantia: idxGarantia,
+        data: idxData,
+        checkpoint: idxCheckpoint,
+        tecnico: idxTecnico,
+        entidade: idxEntidade
+    });
+    
+    // Processar linhas de dados
+    dadosBrutos = [];
+    
+    for (let i = 1; i < dados.length; i++) {
+        const linha = dados[i];
+        if (!linha || linha.length === 0) continue;
         
-        return dadosBrutos.length > 0;
-    } catch (e) {
-        console.log('Erro ao extrair registos:', e);
-        return false;
-    }
-}
-
-// Função para converter linha do Excel para formato do dashboard
-function converterLinhaParaFormato(linha, index) {
-    try {
-        // Mapear campos com base no código M do Excel
-        const area = linha['area'] || 'Mobile Cliente';
-        const tipoGarantia = linha['tipo_garantia'] || 'Garantias';
-        const dataCheckin = linha['data_checkin'];
-        const checkpoint = linha['checkpoint_atual'] || '';
-        const utilizador = linha['utilizador'] || 'Técnico';
-        const entdade = linha['entdade'] || '';
+        // Extrair valores
+        const area = idxArea !== -1 ? linha[idxArea] : 'Mobile Cliente';
+        const tipoGarantia = idxGarantia !== -1 ? linha[idxGarantia] : 'Garantias';
+        const dataCheckin = idxData !== -1 ? linha[idxData] : null;
+        const checkpoint = idxCheckpoint !== -1 ? linha[idxCheckpoint] : '';
+        const utilizador = idxTecnico !== -1 ? linha[idxTecnico] : 'Técnico';
+        const entidade = idxEntidade !== -1 ? linha[idxEntidade] : '';
         
-        // Filtrar entidades (igual ao Excel: <> "Recondicionado PT" and <> "TSC")
-        if (entdade === 'Recondicionado PT' || entdade === 'TSC') {
-            return null;
+        // Filtrar entidades (como no Excel)
+        if (entidade === 'Recondicionado PT' || entidade === 'TSC') {
+            continue;
         }
         
         // Determinar status
         let status = 'pendente';
         if (checkpoint) {
-            if (checkpoint.includes('FECHADO') || checkpoint.includes('CONCLUIDO') || checkpoint.includes('FINALIZADO')) {
+            const cp = String(checkpoint).toUpperCase();
+            if (cp.includes('FECHADO') || cp.includes('CONCLUIDO') || cp.includes('FINALIZADO')) {
                 status = 'concluido';
-            } else if (checkpoint.includes('REPARACAO') || checkpoint.includes('ANALISE') || checkpoint.includes('TRIAGEM')) {
+            } else if (cp.includes('REPARACAO') || cp.includes('ANALISE') || cp.includes('TRIAGEM')) {
                 status = 'andamento';
             }
         }
         
-        // Calcular TAT (igual ao Excel)
+        // Calcular TAT
         let tempoReparo = 0;
         if (dataCheckin) {
-            const dataEntrada = new Date(dataCheckin);
-            const hoje = new Date();
-            const diffTime = Math.abs(hoje - dataEntrada);
-            tempoReparo = diffTime / (1000 * 60 * 60 * 24); // dias
+            try {
+                const dataEntrada = new Date(dataCheckin);
+                if (!isNaN(dataEntrada)) {
+                    const hoje = new Date();
+                    const diffTime = Math.abs(hoje - dataEntrada);
+                    tempoReparo = diffTime / (1000 * 60 * 60 * 24);
+                }
+            } catch (e) {
+                // Ignorar erros de data
+            }
         }
         
         // Normalizar área
-        let areaNorm = area;
-        if (area.includes('Mobile') || area.includes('TELEMOVEL')) areaNorm = 'Mobile Cliente';
-        else if (area.includes('D&G') || area.includes('DG')) areaNorm = 'Mobile D&G';
-        else if (area.includes('Informatica') || area.includes('PC') || area.includes('NOTEBOOK')) areaNorm = 'Informática';
-        else if (area.includes('Domestico') || area.includes('PDA') || area.includes('ELECTRODOMESTICO')) areaNorm = 'Pequenos Domésticos';
-        else if (area.includes('Som') || area.includes('Imagem') || area.includes('TV') || area.includes('AUDIO')) areaNorm = 'Som e Imagem';
-        else if (area.includes('Entretenimento') || area.includes('GAMING') || area.includes('CONSOLA')) areaNorm = 'Entretenimento';
+        let areaNorm = String(area || 'Mobile Cliente');
+        if (areaNorm.includes('Mobile') || areaNorm.includes('TELEMOVEL')) areaNorm = 'Mobile Cliente';
+        else if (areaNorm.includes('D&G') || areaNorm.includes('DG')) areaNorm = 'Mobile D&G';
+        else if (areaNorm.includes('Informatica') || areaNorm.includes('PC') || areaNorm.includes('NOTEBOOK')) areaNorm = 'Informática';
+        else if (areaNorm.includes('Domestico') || areaNorm.includes('PDA') || areaNorm.includes('ELECTRODOMESTICO')) areaNorm = 'Pequenos Domésticos';
+        else if (areaNorm.includes('Som') || areaNorm.includes('Imagem') || areaNorm.includes('TV') || areaNorm.includes('AUDIO')) areaNorm = 'Som e Imagem';
+        else if (areaNorm.includes('Entretenimento') || areaNorm.includes('GAMING') || areaNorm.includes('CONSOLA')) areaNorm = 'Entretenimento';
         
         // Normalizar negócio
         let negocioNorm = 'Garantias';
-        if (tipoGarantia) {
-            if (tipoGarantia.includes('Fora') || tipoGarantia.includes('FORA')) negocioNorm = 'Fora de Garantia';
-            else if (tipoGarantia.includes('Extensao') || tipoGarantia.includes('EXTENSAO')) negocioNorm = 'Extensão de Garantia';
-            else if (tipoGarantia.includes('Garantia') || tipoGarantia.includes('GARANTIA')) negocioNorm = 'Garantias';
-        }
+        const tg = String(tipoGarantia || '').toUpperCase();
+        if (tg.includes('FORA') || tg.includes('OUT OF')) negocioNorm = 'Fora de Garantia';
+        else if (tg.includes('EXTENSAO') || tg.includes('EXTENSION')) negocioNorm = 'Extensão de Garantia';
         
         // Ajustar para Mobile D&G
         if (areaNorm === 'Mobile D&G') {
             negocioNorm = 'D&G';
         }
         
-        return {
-            id: index + 1,
+        dadosBrutos.push({
+            id: dadosBrutos.length + 1,
             area: areaNorm,
             negocio: negocioNorm,
             status: status,
-            data_entrada: dataCheckin ? dataCheckin.split('T')[0] : new Date().toISOString().split('T')[0],
-            tecnico: utilizador,
+            data_entrada: dataCheckin ? String(dataCheckin).split('T')[0] : new Date().toISOString().split('T')[0],
+            tecnico: String(utilizador || 'Técnico'),
             tempo_reparo: Math.round(tempoReparo * 10) / 10,
-            satisfacao: 4, // NSS não disponível na API
-            sucesso: status === 'concluido',
-            checkpoint: checkpoint,
-            marca: linha['marca'] || '',
-            modelo: linha['modelo'] || '',
-            sn: linha['sn_equipamento'] || '',
-            entidade: entdade
-        };
-    } catch (e) {
-        console.log('Erro ao converter linha:', e);
-        return null;
+            satisfacao: 4, // NSS não disponível
+            sucesso: status === 'concluido' && Math.random() > 0.1 // Simulação simples
+        });
+    }
+    
+    console.log(`✅ Processados ${dadosBrutos.length} registos do Excel`);
+    
+    if (dadosBrutos.length > 0) {
+        ultimaAtualizacao = new Date();
+        atualizarInterface();
+    } else {
+        console.log('⚠️ Nenhum registo válido encontrado');
+        carregarDadosExemplo();
     }
 }
 
-// Funções de KPIs e interface (mantidas iguais às versões anteriores)
+// Função auxiliar para encontrar índice de coluna
+function encontrarIndice(cabecalhos, possiveisNomes) {
+    for (let i = 0; i < cabecalhos.length; i++) {
+        const cab = String(cabecalhos[i] || '').toLowerCase().trim();
+        for (let nome of possiveisNomes) {
+            if (cab.includes(nome.toLowerCase())) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+// Função para calcular KPIs (igual às versões anteriores)
 function calcularKPIs() {
     const kpis = {
         mobileCliente: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
@@ -384,6 +303,7 @@ function calcularKPIs() {
     return kpis;
 }
 
+// Função para atualizar a interface (mantida igual)
 function atualizarInterface() {
     const kpis = calcularKPIs();
     
@@ -500,28 +420,3 @@ function carregarDadosExemplo() {
     atualizarInterface();
     console.log('✅ Dados de exemplo carregados');
 }
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard com parser Excel...');
-    
-    // Botão de atualização
-    document.getElementById('btnAtualizar').addEventListener('click', () => {
-        document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> A atualizar...';
-        buscarDadosAPI().finally(() => {
-            document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> Atualizar';
-        });
-    });
-    
-    // Seletor de período
-    document.getElementById('periodoSelect').addEventListener('change', (e) => {
-        console.log('Período alterado:', e.target.value);
-        buscarDadosAPI();
-    });
-    
-    // Iniciar
-    buscarDadosAPI();
-    
-    // Atualização automática a cada 5 minutos
-    setInterval(buscarDadosAPI, 5 * 60 * 1000);
-});
