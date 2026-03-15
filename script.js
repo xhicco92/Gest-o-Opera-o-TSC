@@ -120,21 +120,55 @@ async function buscarDadosAPI() {
     }
 }
 
-// Função para processar a resposta XML
+// Função para processar a resposta XML - VERSÃO DEBUG
 function processarResposta(xmlText) {
-    console.log('XML recebido (primeiros 500 caracteres):', xmlText.substring(0, 500));
+    console.log('========== XML COMPLETO ==========');
+    console.log(xmlText); // Mostra o XML inteiro
+    console.log('==================================');
     
-    // Parse do XML
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    
-    // Verifica erros de parse
-    const parseError = xmlDoc.querySelector('parsererror');
-    if (parseError) {
-        console.error('Erro no parse do XML');
-        carregarDadosExemplo();
-        return;
+    // Tenta mostrar de forma mais legível
+    try {
+        // Mostra os primeiros 1000 caracteres se for muito grande
+        if (xmlText.length > 1000) {
+            console.log('PRIMEIROS 1000 CARACTERES:');
+            console.log(xmlText.substring(0, 1000));
+            console.log('... (resto omitido) ...');
+        }
+        
+        // Tenta fazer parse para ver a estrutura
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+        
+        // Verifica se há erro de parse
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+            console.log('❌ Erro no parse do XML');
+            console.log('Mensagem de erro:', parseError.textContent);
+        } else {
+            console.log('✅ XML parseado com sucesso!');
+            
+            // Lista todas as tags encontradas
+            const todasTags = xmlDoc.getElementsByTagName('*');
+            const tagsUnicas = new Set();
+            Array.from(todasTags).forEach(tag => tagsUnicas.add(tag.tagName));
+            console.log('📌 Tags encontradas:', Array.from(tagsUnicas));
+            
+            // Mostra o primeiro elemento de cada tipo
+            tagsUnicas.forEach(tag => {
+                const elementos = xmlDoc.getElementsByTagName(tag);
+                if (elementos.length > 0) {
+                    console.log(`Primeiro <${tag}>:`, elementos[0].textContent?.substring(0, 100));
+                }
+            });
+        }
+    } catch (e) {
+        console.log('Erro ao processar XML:', e);
     }
+    
+    // Por enquanto, usa dados de exemplo
+    console.log('⚠️ A usar dados de exemplo até ajustarmos o parser');
+    carregarDadosExemplo();
+}
     
     // Tenta encontrar a estrutura dos dados
     const todosElementos = xmlDoc.getElementsByTagName('*');
