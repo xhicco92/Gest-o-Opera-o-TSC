@@ -5,21 +5,138 @@ let cabecalhosOriginais = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inicializando dashboard com cálculos...');
+    console.log('🚀 Inicializando dashboard...');
     
+    // Criar a estrutura das áreas
+    criarEstruturaAreas();
+    
+    // Adicionar botão de upload
     adicionarBotaoUpload();
     
+    // Botão de atualização
     document.getElementById('btnAtualizar').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
     
+    // Seletor de período
     document.getElementById('periodoSelect').addEventListener('change', (e) => {
         console.log('Período alterado:', e.target.value);
         carregarDadosExemplo();
     });
     
+    // Carregar dados de exemplo inicialmente
     carregarDadosExemplo();
 });
+
+// Função para criar a estrutura das áreas dinamicamente
+function criarEstruturaAreas() {
+    const areasGrid = document.getElementById('areasGrid');
+    
+    const areas = [
+        { id: 'mobileCliente', nome: '📱 Mobile Cliente', classe: 'mobile-cliente' },
+        { id: 'mobileDG', nome: '📟 Mobile D&G', classe: 'mobile-dg' },
+        { id: 'informatica', nome: '💻 Informática', classe: 'informatica' },
+        { id: 'pequenos', nome: '🔌 Pequenos Domésticos', classe: 'pequenos-domesticos' },
+        { id: 'som', nome: '🎵 Som e Imagem', classe: 'som-imagem' },
+        { id: 'entretenimento', nome: '🎮 Entretenimento', classe: 'entretenimento' }
+    ];
+    
+    const negociosPorArea = {
+        'mobileCliente': [
+            { id: 'Garantias', nome: 'Garantias', badge: 'garantias', label: 'G' },
+            { id: 'ForaGarantia', nome: 'Fora de Garantia', badge: 'fora-garantia', label: 'FG' },
+            { id: 'Extensao', nome: 'Extensão de Garantia', badge: 'extensao', label: 'EG' }
+        ],
+        'mobileDG': [
+            { id: 'DG', nome: 'D&G', badge: 'dg', label: 'D&G' }
+        ],
+        'informatica': [
+            { id: 'Garantias', nome: 'Garantias', badge: 'garantias', label: 'G' },
+            { id: 'ForaGarantia', nome: 'Fora de Garantia', badge: 'fora-garantia', label: 'FG' },
+            { id: 'Extensao', nome: 'Extensão de Garantia', badge: 'extensao', label: 'EG' }
+        ],
+        'pequenos': [
+            { id: 'Garantias', nome: 'Garantias', badge: 'garantias', label: 'G' },
+            { id: 'ForaGarantia', nome: 'Fora de Garantia', badge: 'fora-garantia', label: 'FG' },
+            { id: 'Extensao', nome: 'Extensão de Garantia', badge: 'extensao', label: 'EG' }
+        ],
+        'som': [
+            { id: 'Garantias', nome: 'Garantias', badge: 'garantias', label: 'G' },
+            { id: 'ForaGarantia', nome: 'Fora de Garantia', badge: 'fora-garantia', label: 'FG' },
+            { id: 'Extensao', nome: 'Extensão de Garantia', badge: 'extensao', label: 'EG' }
+        ],
+        'entretenimento': [
+            { id: 'Garantias', nome: 'Garantias', badge: 'garantias', label: 'G' },
+            { id: 'ForaGarantia', nome: 'Fora de Garantia', badge: 'fora-garantia', label: 'FG' },
+            { id: 'Extensao', nome: 'Extensão de Garantia', badge: 'extensao', label: 'EG' }
+        ]
+    };
+    
+    const campos = [
+        { id: 'Analises', label: 'Análises' },
+        { id: 'Reparacao', label: 'Reparação' },
+        { id: 'RepPendentePeca', label: 'Rep. Pendente Peça' },
+        { id: 'RepNaoPendentePeca', label: 'Rep. Não Pendente Peça' },
+        { id: 'TATAberto', label: 'TAT Aberto' },
+        { id: 'Orcamento', label: 'Orçamento' },
+        { id: 'AgAceitacao', label: 'Ag Aceitação Orçamento' },
+        { id: 'Debitos', label: 'Débitos WSS' }
+    ];
+    
+    areasGrid.innerHTML = '';
+    
+    areas.forEach(area => {
+        const areaCard = document.createElement('div');
+        areaCard.className = 'area-card';
+        
+        // Nome da área para o total
+        const totalId = area.id === 'mobileDG' ? 'totalMobileDG' : 
+                       `total${area.id.charAt(0).toUpperCase() + area.id.slice(1)}`;
+        
+        areaCard.innerHTML = `
+            <div class="area-header ${area.classe}">
+                <h2>${area.nome}</h2>
+                <span class="area-total" id="${totalId}">0</span>
+            </div>
+            <div class="negocios-container" id="${area.id}Container"></div>
+        `;
+        
+        areasGrid.appendChild(areaCard);
+        
+        const container = document.getElementById(`${area.id}Container`);
+        const negocios = negociosPorArea[area.id];
+        
+        negocios.forEach(negocio => {
+            const negocioRow = document.createElement('div');
+            negocioRow.className = 'negocio-row';
+            
+            let kpisHTML = '';
+            campos.forEach(campo => {
+                const id = `${area.id}${negocio.id}${campo.id}`;
+                kpisHTML += `
+                    <div class="mini-kpi">
+                        <span class="mini-label">${campo.label}</span>
+                        <span class="mini-value" id="${id}">-</span>
+                    </div>
+                `;
+            });
+            
+            negocioRow.innerHTML = `
+                <div class="negocio-title">
+                    <span class="badge ${negocio.badge}">${negocio.label}</span>
+                    <span>${negocio.nome}</span>
+                </div>
+                <div class="negocio-kpis" style="grid-template-columns: repeat(8, 1fr);">
+                    ${kpisHTML}
+                </div>
+            `;
+            
+            container.appendChild(negocioRow);
+        });
+    });
+    
+    console.log('✅ Estrutura de áreas criada');
+}
 
 // Adicionar botão de upload
 function adicionarBotaoUpload() {
@@ -109,13 +226,13 @@ function processarDadosExcel(dados) {
     cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Mapear índices (coluna I = índice 8, zero-based)
+    // Mapear índices
     const idxTipologia = encontrarIndice(cabecalhos, ['tipologia', 'Tipologia', 'area', 'Área']);
     const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint', 'Estado', 'status']);
     const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça', 'aguarda peça']);
     const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin', 'Data Entrada']);
     const idxPolo = encontrarIndice(cabecalhos, ['polo', 'Polo', 'unidade']);
-    const idxTipoGarantia = 8; // Coluna I (índice 8, zero-based)
+    const idxTipoGarantia = 8; // Coluna I
     
     console.log('📍 Mapeamento:', {
         tipologia: idxTipologia,
@@ -147,7 +264,7 @@ function processarDadosExcel(dados) {
         const dataCheckin = idxDataCheckin !== -1 ? linha[idxDataCheckin] : null;
         const tipoGarantia = linha[idxTipoGarantia] ? String(linha[idxTipoGarantia]) : '';
         
-        // Calcular TAT (dias desde data_checkin)
+        // Calcular TAT
         let tat = 0;
         if (dataCheckin) {
             try {
@@ -168,7 +285,7 @@ function processarDadosExcel(dados) {
         const isPendentePeca = pendentePeca.includes('sim') || pendentePeca === 's' || pendentePeca === '1';
         
         // Mapear tipo_garantia para negócio
-        let negocio = '';
+        let negocio = 'Outros';
         const tg = tipoGarantia.toLowerCase();
         
         if (tg.includes('pop') || tg.includes('stock de loja') || tg.includes('garantias')) {
@@ -179,8 +296,6 @@ function processarDadosExcel(dados) {
             negocio = 'Extensão de Garantia';
         } else if (tg.includes('seguro d&g') || tg.includes('d&g')) {
             negocio = 'D&G';
-        } else {
-            negocio = 'Outros';
         }
         
         // Normalizar tipologia para as áreas do dashboard
@@ -209,27 +324,15 @@ function processarDadosExcel(dados) {
         }
         
         dadosBrutos.push({
-            id: dadosBrutos.length + 1,
             area: areaNorm,
             negocio: negocio,
-            tipologia_original: tipologia,
-            tipo_garantia_original: tipoGarantia,
-            checkpoint: checkpoint,
+            checkpoint: checkpoint.toLowerCase(),
             pendente_peca: isPendentePeca,
-            data_checkin: dataCheckin,
-            tat: tat,
-            polo: polo
+            tat: tat
         });
     }
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos (TSC South apenas)`);
-    console.log('📊 Distribuição por negócio:', {
-        garantias: dadosBrutos.filter(d => d.negocio === 'Garantias').length,
-        foraGarantia: dadosBrutos.filter(d => d.negocio === 'Fora de Garantia').length,
-        extensao: dadosBrutos.filter(d => d.negocio === 'Extensão de Garantia').length,
-        dg: dadosBrutos.filter(d => d.negocio === 'D&G').length,
-        outros: dadosBrutos.filter(d => d.negocio === 'Outros').length
-    });
+    console.log(`✅ Processados ${dadosBrutos.length} registos`);
     
     if (dadosBrutos.length > 0) {
         ultimaAtualizacao = new Date();
@@ -253,9 +356,8 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
     return -1;
 }
 
-// Função para calcular as métricas por área e negócio
+// Função para calcular as métricas
 function calcularMetricas() {
-    // Mapeamento de checkpoints para estados
     const estadosAnalise = ['análise técnica', 'analise tecnica', 'análise', 'analise'];
     const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'reparação', 'reparacao'];
     const estadosTAT = ['análise técnica', 'analise tecnica', 'intervenção técnica', 'intervencao tecnica', 
@@ -265,48 +367,39 @@ function calcularMetricas() {
     const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
     const estadosDebito = ['debit', 'débito', 'debito'];
 
-    // Estrutura para armazenar métricas por área e negócio
-    const metricas = {
-        'Mobile Cliente': {
-            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        },
-        'Mobile D&G': {
-            'D&G': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        },
-        'Informática': {
-            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        },
-        'Pequenos Domésticos': {
-            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        },
-        'Som e Imagem': {
-            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        },
-        'Entretenimento': {
-            'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Fora de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 },
-            'Extensão de Garantia': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0, somaTat:0, countTat:0 }
-        }
-    };
+    const metricas = {};
+    
+    // Inicializar estrutura
+    const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
+    const negocios = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
+    
+    areas.forEach(area => {
+        metricas[area] = {};
+        negocios.forEach(negocio => {
+            metricas[area][negocio] = {
+                analises: 0,
+                reparacao: 0,
+                repPendentePeca: 0,
+                repNaoPendentePeca: 0,
+                somaTat: 0,
+                countTat: 0,
+                tatAberto: 0,
+                orcamento: 0,
+                agAceitacao: 0,
+                debitos: 0
+            };
+        });
+    });
 
-    // Processar cada registo
+    // Processar registos
     dadosBrutos.forEach(item => {
         const area = item.area;
-        if (!metricas[area]) return;
-        
         const negocio = item.negocio;
-        if (!metricas[area][negocio]) return;
+        
+        if (!metricas[area] || !metricas[area][negocio]) return;
         
         const stats = metricas[area][negocio];
-        const checkpoint = item.checkpoint.toLowerCase();
+        const checkpoint = item.checkpoint;
         
         // Análises
         if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
@@ -316,8 +409,6 @@ function calcularMetricas() {
         // Reparação
         if (estadosReparacao.some(estado => checkpoint.includes(estado))) {
             stats.reparacao++;
-            
-            // Pendente/Não Pendente Peça
             if (item.pendente_peca) {
                 stats.repPendentePeca++;
             } else {
@@ -325,7 +416,7 @@ function calcularMetricas() {
             }
         }
         
-        // TAT Aberto (soma para cálculo da média)
+        // TAT
         if (estadosTAT.some(estado => checkpoint.includes(estado))) {
             stats.somaTat += item.tat;
             stats.countTat++;
@@ -336,7 +427,7 @@ function calcularMetricas() {
             stats.orcamento++;
         }
         
-        // Aguarda Aceitação
+        // Aguarda
         if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
             stats.agAceitacao++;
         }
@@ -347,9 +438,9 @@ function calcularMetricas() {
         }
     });
 
-    // Calcular médias do TAT
-    Object.keys(metricas).forEach(area => {
-        Object.keys(metricas[area]).forEach(negocio => {
+    // Calcular médias
+    areas.forEach(area => {
+        negocios.forEach(negocio => {
             const stats = metricas[area][negocio];
             if (stats.countTat > 0) {
                 stats.tatAberto = Math.round((stats.somaTat / stats.countTat) * 10) / 10;
@@ -360,71 +451,62 @@ function calcularMetricas() {
     return metricas;
 }
 
-// Função para mostrar as métricas no dashboard
+// Função para mostrar métricas
 function calcularEMostrarMetricas() {
     const metricas = calcularMetricas();
     console.log('📊 Métricas calculadas:', metricas);
     
-    // Atualizar cada campo no HTML
-    const areas = [
-        { nome: 'Mobile Cliente', prefix: 'mobileCliente', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
-        { nome: 'Mobile D&G', prefix: 'mobileDG', negocios: ['DG'] },
-        { nome: 'Informática', prefix: 'informatica', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
-        { nome: 'Pequenos Domésticos', prefix: 'pequenos', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
-        { nome: 'Som e Imagem', prefix: 'som', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] },
-        { nome: 'Entretenimento', prefix: 'entretenimento', negocios: ['Garantias', 'ForaGarantia', 'Extensao'] }
-    ];
-    
-    // Mapeamento de nomes de negócio para chaves nas métricas
-    const mapaNegocios = {
+    // Mapeamento de nomes para IDs
+    const mapaIds = {
+        'Mobile Cliente': 'mobileCliente',
+        'Mobile D&G': 'mobileDG',
+        'Informática': 'informatica',
+        'Pequenos Domésticos': 'pequenos',
+        'Som e Imagem': 'som',
+        'Entretenimento': 'entretenimento',
         'Garantias': 'Garantias',
-        'ForaGarantia': 'Fora de Garantia',
-        'Extensao': 'Extensão de Garantia',
-        'DG': 'D&G'
+        'Fora de Garantia': 'ForaGarantia',
+        'Extensão de Garantia': 'Extensao',
+        'D&G': 'DG'
     };
     
-    areas.forEach(areaConfig => {
-        const areaMetricas = metricas[areaConfig.nome];
-        if (!areaMetricas) return;
-        
-        // Total da área (soma de todas as análises)
+    // Atualizar cada campo
+    Object.keys(metricas).forEach(area => {
         let totalArea = 0;
         
-        areaConfig.negocios.forEach(negocioKey => {
-            const negocioNome = mapaNegocios[negocioKey];
-            const stats = areaMetricas[negocioNome];
+        Object.keys(metricas[area]).forEach(negocio => {
+            const stats = metricas[area][negocio];
             if (!stats) return;
             
             totalArea += stats.analises || 0;
             
-            // Determinar prefixo correto para os IDs
-            let prefix = areaConfig.prefix;
+            const prefix = mapaIds[area];
+            const negocioId = mapaIds[negocio];
             
-            // Atualizar cada campo
+            if (!prefix || !negocioId) return;
+            
             const campos = [
-                { id: `${prefix}${negocioKey}Analises`, valor: stats.analises },
-                { id: `${prefix}${negocioKey}Reparacao`, valor: stats.reparacao },
-                { id: `${prefix}${negocioKey}RepPendentePeca`, valor: stats.repPendentePeca },
-                { id: `${prefix}${negocioKey}RepNaoPendentePeca`, valor: stats.repNaoPendentePeca },
-                { id: `${prefix}${negocioKey}TATAberto`, valor: stats.tatAberto ? stats.tatAberto.toFixed(1) : '0.0' },
-                { id: `${prefix}${negocioKey}Orcamento`, valor: stats.orcamento },
-                { id: `${prefix}${negocioKey}AgAceitacao`, valor: stats.agAceitacao },
-                { id: `${prefix}${negocioKey}Debitos`, valor: stats.debitos }
+                { id: `${prefix}${negocioId}Analises`, valor: stats.analises },
+                { id: `${prefix}${negocioId}Reparacao`, valor: stats.reparacao },
+                { id: `${prefix}${negocioId}RepPendentePeca`, valor: stats.repPendentePeca },
+                { id: `${prefix}${negocioId}RepNaoPendentePeca`, valor: stats.repNaoPendentePeca },
+                { id: `${prefix}${negocioId}TATAberto`, valor: stats.tatAberto ? stats.tatAberto.toFixed(1) : '0.0' },
+                { id: `${prefix}${negocioId}Orcamento`, valor: stats.orcamento },
+                { id: `${prefix}${negocioId}AgAceitacao`, valor: stats.agAceitacao },
+                { id: `${prefix}${negocioId}Debitos`, valor: stats.debitos }
             ];
             
             campos.forEach(campo => {
                 const element = document.getElementById(campo.id);
                 if (element) {
                     element.textContent = campo.valor;
-                } else {
-                    console.log(`Elemento não encontrado: ${campo.id}`);
                 }
             });
         });
         
         // Atualizar total da área
-        const totalId = `total${areaConfig.prefix === 'mobileDG' ? 'MobileDG' : 
-            (areaConfig.prefix.charAt(0).toUpperCase() + areaConfig.prefix.slice(1))}`;
+        const totalId = area === 'Mobile D&G' ? 'totalMobileDG' : 
+                       `total${area.replace(' ', '')}`;
         const totalElement = document.getElementById(totalId);
         if (totalElement) {
             totalElement.textContent = totalArea;
@@ -437,7 +519,6 @@ function calcularEMostrarMetricas() {
     let countTatGlobal = 0;
     let totalOrcamentos = 0;
     let totalAguarda = 0;
-    let totalDebitos = 0;
     
     Object.values(metricas).forEach(area => {
         Object.values(area).forEach(neg => {
@@ -446,7 +527,6 @@ function calcularEMostrarMetricas() {
             countTatGlobal += neg.countTat || 0;
             totalOrcamentos += neg.orcamento || 0;
             totalAguarda += neg.agAceitacao || 0;
-            totalDebitos += neg.debitos || 0;
         });
     });
     
@@ -456,48 +536,35 @@ function calcularEMostrarMetricas() {
     document.getElementById('nssMedio').textContent = totalOrcamentos;
     document.getElementById('produtividadeGlobal').textContent = totalAguarda;
     
-    // Atualizar rodapé
+    // Rodapé
     document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
     
     const estadosAbertos = ['análise técnica', 'intervenção técnica', 'orçamento', 'aguarda aceitação orçamento'];
     const emAberto = dadosBrutos.filter(item => 
-        estadosAbertos.some(estado => item.checkpoint.toLowerCase().includes(estado))
+        estadosAbertos.some(estado => item.checkpoint.includes(estado))
     ).length;
     document.getElementById('emAndamento').textContent = emAberto;
     
-    const hoje = new Date().toISOString().split('T')[0];
-    const checkinsHoje = dadosBrutos.filter(item => {
-        if (!item.data_checkin) return false;
-        let dataStr;
-        if (typeof item.data_checkin === 'number') {
-            dataStr = new Date((item.data_checkin - 25569) * 86400 * 1000).toISOString().split('T')[0];
-        } else {
-            dataStr = new Date(item.data_checkin).toISOString().split('T')[0];
-        }
-        return dataStr === hoje;
-    }).length;
-    document.getElementById('concluidasHoje').textContent = checkinsHoje;
+    document.getElementById('concluidasHoje').textContent = '-'; // Simplificado
     
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? 
         ultimaAtualizacao.toLocaleString('pt-PT') : '-';
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
     
-    console.log('✅ Dashboard atualizado com os dados reais!');
+    console.log('✅ Dashboard atualizado!');
 }
 
-// Dados de exemplo (fallback)
+// Dados de exemplo
 function carregarDadosExemplo() {
     dadosBrutos = [];
     const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
     const negociosLista = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
-    const checkpoints = ['Análise Técnica', 'Intervenção Técnica', 'Orçamento', 'Aguarda Aceitação Orçamento', 'Nível 3', 'Pré-Análise', 'Controlo de Qualidade', 'Debit'];
+    const checkpoints = ['análise técnica', 'intervenção técnica', 'orçamento', 'aguarda aceitação orçamento', 'nível 3', 'pré-análise', 'controlo de qualidade', 'debit'];
     
     for (let i = 1; i <= 200; i++) {
         const area = areas[Math.floor(Math.random() * areas.length)];
         const negocio = negociosLista[Math.floor(Math.random() * negociosLista.length)];
         const checkpoint = checkpoints[Math.floor(Math.random() * checkpoints.length)];
-        const data = new Date();
-        data.setDate(data.getDate() - Math.floor(Math.random() * 30));
         
         // Ajustar área para Mobile D&G quando negócio é D&G
         let areaFinal = area;
@@ -506,14 +573,11 @@ function carregarDadosExemplo() {
         }
         
         dadosBrutos.push({
-            id: i,
             area: areaFinal,
             negocio: negocio,
             checkpoint: checkpoint,
             pendente_peca: Math.random() > 0.7,
-            data_checkin: data,
-            tat: Math.random() * 15,
-            polo: 'TSC South'
+            tat: Math.random() * 15
         });
     }
     
