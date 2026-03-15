@@ -24,10 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarDadosExemplo();
     });
     
-    // Por fim: carregar dados de exemplo (agora com a estrutura pronta)
+    // Por fim: carregar dados de exemplo
     setTimeout(() => {
         carregarDadosExemplo();
-    }, 100); // Pequeno atraso para garantir que o HTML foi renderizado
+    }, 100);
 });
 
 // Função para criar a estrutura das áreas
@@ -91,7 +91,6 @@ function criarEstruturaAreas() {
         { id: 'Debitos', label: 'Débitos WSS' }
     ];
     
-    // Limpar conteúdo existente
     areasGrid.innerHTML = '';
     
     areas.forEach(area => {
@@ -145,7 +144,6 @@ function criarEstruturaAreas() {
     
     console.log('✅ Estrutura de áreas criada com sucesso!');
     
-    // Verificar se os IDs foram criados
     const testId = 'mobileClienteGarantiasAnalises';
     const testElement = document.getElementById(testId);
     if (testElement) {
@@ -160,7 +158,6 @@ function adicionarBotaoUpload() {
     const headerControls = document.querySelector('.header-controls');
     if (!headerControls) return;
     
-    // Remover input existente se houver
     const existingInput = document.getElementById('fileInput');
     if (existingInput) existingInput.remove();
     
@@ -474,7 +471,7 @@ function calcularMetricas() {
     return metricas;
 }
 
-// Função para mostrar métricas
+// Função para mostrar métricas (CORRIGIDA - apenas combinações válidas)
 function calcularEMostrarMetricas() {
     console.log('🔄 Atualizando dashboard com métricas...');
     
@@ -498,12 +495,32 @@ function calcularEMostrarMetricas() {
     let elementosEncontrados = 0;
     let elementosTotal = 0;
     
-    // Atualizar cada campo
-    Object.keys(metricas).forEach(area => {
+    // Definir as combinações válidas de área + negócio
+    const combinacoesValidas = [
+        // Mobile Cliente
+        { area: 'Mobile Cliente', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        // Mobile D&G (apenas D&G)
+        { area: 'Mobile D&G', negocios: ['D&G'] },
+        // Informática
+        { area: 'Informática', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        // Pequenos Domésticos
+        { area: 'Pequenos Domésticos', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        // Som e Imagem
+        { area: 'Som e Imagem', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        // Entretenimento
+        { area: 'Entretenimento', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] }
+    ];
+    
+    // Atualizar apenas as combinações válidas
+    combinacoesValidas.forEach(combo => {
+        const area = combo.area;
+        const areaMetricas = metricas[area];
+        if (!areaMetricas) return;
+        
         let totalArea = 0;
         
-        Object.keys(metricas[area]).forEach(negocio => {
-            const stats = metricas[area][negocio];
+        combo.negocios.forEach(negocio => {
+            const stats = areaMetricas[negocio];
             if (!stats) return;
             
             totalArea += stats.analises || 0;
@@ -532,14 +549,14 @@ function calcularEMostrarMetricas() {
                     element.textContent = campo.valor;
                     elementosEncontrados++;
                 } else {
-                    console.log(`⚠️ Elemento não encontrado: ${campo.id}`);
+                    console.log(`⚠️ Elemento não encontrado (deveria existir): ${campo.id}`);
                 }
             });
         });
         
         // Atualizar total da área
         const totalId = area === 'Mobile D&G' ? 'totalMobileDG' : 
-                       `total${area.replace(' ', '')}`;
+                       `total${area.replace(' ', '').replace('&', '')}`;
         const totalElement = document.getElementById(totalId);
         if (totalElement) {
             totalElement.textContent = totalArea;
@@ -589,36 +606,47 @@ function calcularEMostrarMetricas() {
     console.log('✅ Dashboard atualizado!');
 }
 
-// Dados de exemplo
+// Dados de exemplo (CORRIGIDO - distribuição realista)
 function carregarDadosExemplo() {
     console.log('🔄 Carregando dados de exemplo...');
     
     dadosBrutos = [];
-    const areas = ['Mobile Cliente', 'Mobile D&G', 'Informática', 'Pequenos Domésticos', 'Som e Imagem', 'Entretenimento'];
-    const negociosLista = ['Garantias', 'Fora de Garantia', 'Extensão de Garantia', 'D&G'];
+    
+    // Distribuição realista: Mobile D&G só tem negócio D&G, outras áreas têm Garantias/Fora/Extensão
+    const configAreas = [
+        { nome: 'Mobile Cliente', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        { nome: 'Mobile D&G', negocios: ['D&G'] },
+        { nome: 'Informática', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        { nome: 'Pequenos Domésticos', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        { nome: 'Som e Imagem', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
+        { nome: 'Entretenimento', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] }
+    ];
+    
     const checkpoints = ['análise técnica', 'intervenção técnica', 'orçamento', 'aguarda aceitação orçamento', 'nível 3', 'pré-análise', 'controlo de qualidade', 'debit'];
     
-    for (let i = 1; i <= 200; i++) {
-        const area = areas[Math.floor(Math.random() * areas.length)];
-        const negocio = negociosLista[Math.floor(Math.random() * negociosLista.length)];
-        const checkpoint = checkpoints[Math.floor(Math.random() * checkpoints.length)];
-        
-        // Ajustar área para Mobile D&G quando negócio é D&G
-        let areaFinal = area;
-        if (negocio === 'D&G') {
-            areaFinal = 'Mobile D&G';
-        }
-        
-        dadosBrutos.push({
-            area: areaFinal,
-            negocio: negocio,
-            checkpoint: checkpoint,
-            pendente_peca: Math.random() > 0.7,
-            tat: Math.random() * 15
+    let id = 1;
+    configAreas.forEach(config => {
+        config.negocios.forEach(negocio => {
+            // Gerar entre 20-40 registos por combinação área+negócio
+            const numRegistos = 20 + Math.floor(Math.random() * 20);
+            
+            for (let i = 0; i < numRegistos; i++) {
+                const checkpoint = checkpoints[Math.floor(Math.random() * checkpoints.length)];
+                
+                dadosBrutos.push({
+                    id: id++,
+                    area: config.nome,
+                    negocio: negocio,
+                    checkpoint: checkpoint,
+                    pendente_peca: Math.random() > 0.7,
+                    tat: Math.random() * 15
+                });
+            }
         });
-    }
+    });
+    
+    console.log(`✅ Gerados ${dadosBrutos.length} registos de exemplo`);
     
     ultimaAtualizacao = new Date();
     calcularEMostrarMetricas();
-    console.log('✅ Dados de exemplo carregados');
 }
