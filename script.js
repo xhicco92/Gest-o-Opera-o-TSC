@@ -2,258 +2,115 @@
 const USERNAME = 'francisco.moreira@worten.pt';
 const PASSWORD = 'Alice311020***';
 
-// Proxy CORS que funciona com POST
-const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
-const API_URL = 'https://reportingwss.noshape.com/ServiceV3.asmx/TSC_OrsAbertasEmCadaCheckpoint_2';
-
 // Estado da aplicação
 let dadosBrutos = [];
 let ultimaAtualizacao = null;
 
-// Função para buscar dados da API
+// Função para testar diferentes formatos de data
 async function buscarDadosAPI() {
     try {
-        console.log('🔄 Buscando dados da API...');
+        console.log('🔄 Testando diferentes formatos de data...');
         
-        // Mostra aviso sobre o proxy
-        if (!document.querySelector('.proxy-aviso')) {
-            const aviso = document.createElement('div');
-            aviso.className = 'proxy-aviso';
-            aviso.innerHTML = '⚠️ A usar proxy temporário. Se os dados não carregarem, <button id="btnAtivarProxy" style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">clique aqui para ativar</button>';
-            aviso.style.cssText = 'background: #cce5ff; color: #004085; padding: 10px; border-radius: 5px; margin: 10px 0; border: 1px solid #b8daff; text-align:center;';
-            document.querySelector('.dashboard-header').appendChild(aviso);
-            
-            document.getElementById('btnAtivarProxy').addEventListener('click', () => {
-                window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
-            });
-        }
-        
-        // Prepara os parâmetros
-        const parametros = new URLSearchParams();
-        parametros.append('UserName', USERNAME);
-        parametros.append('Password', PASSWORD);
-        
-        // Período (últimos 30 dias)
         const dataFim = new Date();
         const dataIni = new Date();
         dataIni.setDate(dataIni.getDate() - 30);
         
-        parametros.append('dataIni', dataIni.toISOString().split('T')[0]);
-        parametros.append('dataFim', dataFim.toISOString().split('T')[0]);
-
-        console.log('A enviar requisição com parâmetros:', parametros.toString());
-
-        // Configuração para o proxy
-        const configuracao = {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: parametros.toString()
-        };
-
-        // Tenta primeiro sem proxy (para teste local)
-        try {
-            console.log('A tentar sem proxy...');
-            const respostaDirecta = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: parametros.toString()
-            });
+        // Diferentes formatos de data para testar
+        const formatosData = [
+            { nome: 'ISO (aaaa-mm-dd)', ini: dataIni.toISOString().split('T')[0], fim: dataFim.toISOString().split('T')[0] },
+            { nome: 'PT (dd/mm/aaaa)', ini: formatarDataPT(dataIni), fim: formatarDataPT(dataFim) },
+            { nome: 'US (mm/dd/aaaa)', ini: formatarDataUS(dataIni), fim: formatarDataUS(dataFim) },
+            { nome: 'Sem separador (aaaammdd)', ini: formatarDataNumero(dataIni), fim: formatarDataNumero(dataFim) }
+        ];
+        
+        // Testa cada formato
+        for (let formato of formatosData) {
+            console.log(`\n📅 Testando formato: ${formato.nome}`);
+            console.log(`dataIni: ${formato.ini}, dataFim: ${formato.fim}`);
             
-            if (respostaDirecta.ok) {
-                const xmlText = await respostaDirecta.text();
-                console.log('✅ Resposta direta recebida!');
-                processarResposta(xmlText);
-                return;
+            const parametros = new URLSearchParams();
+            parametros.append('UserName', USERNAME);
+            parametros.append('Password', PASSWORD);
+            parametros.append('dataIni', formato.ini);
+            parametros.append('dataFim', formato.fim);
+            
+            try {
+                // Tenta sem proxy primeiro
+                const resposta = await fetch('https://reportingwss.noshape.com/ServiceV3.asmx/TSC_OrsAbertasEmCadaCheckpoint_2', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: parametros.toString()
+                });
+                
+                console.log(`Status: ${resposta.status} ${resposta.statusText}`);
+                
+                if (resposta.ok) {
+                    const texto = await resposta.text();
+                    console.log('✅ SUCESSO! Resposta recebida:');
+                    console.log(texto.substring(0, 500));
+                    
+                    // Se conseguir, processa os dados
+                    processarResposta(texto);
+                    return;
+                } else {
+                    console.log(`❌ Falhou com status ${resposta.status}`);
+                    // Tenta ler o corpo do erro
+                    try {
+                        const erroTexto = await resposta.text();
+                        console.log('Corpo do erro:', erroTexto.substring(0, 200));
+                    } catch (e) {}
+                }
+            } catch (erro) {
+                console.log(`❌ Erro de rede: ${erro.message}`);
             }
-        } catch (e) {
-            console.log('❌ Falha direta, a tentar com proxy...');
         }
-
-        // Tenta com proxy
-        const urlComProxy = CORS_PROXY + API_URL;
-        const resposta = await fetch(urlComProxy, configuracao);
-
-        if (!resposta.ok) {
-            throw new Error(`Erro HTTP: ${resposta.status}`);
-        }
-
-        const xmlText = await resposta.text();
-        console.log('✅ Resposta via proxy recebida!');
-        processarResposta(xmlText);
+        
+        console.log('\n⚠️ Todos os formatos falharam. A usar dados de exemplo.');
+        carregarDadosExemplo();
         
     } catch (erro) {
-        console.error('❌ Erro ao buscar dados:', erro);
-        
-        // Tenta um proxy alternativo
-        try {
-            console.log('Tentando proxy alternativo...');
-            const proxyAlternativo = 'https://thingproxy.freeboard.io/fetch/';
-            const resposta = await fetch(proxyAlternativo + API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    'UserName': USERNAME,
-                    'Password': PASSWORD,
-                    'dataIni': '2026-03-01',
-                    'dataFim': '2026-03-15'
-                }).toString()
-            });
-            
-            if (resposta.ok) {
-                const xmlText = await resposta.text();
-                processarResposta(xmlText);
-                return;
-            }
-        } catch (erro2) {
-            console.log('Proxy alternativo também falhou');
-        }
-        
-        exibirErro('Não foi possível conectar à API. A usar dados de exemplo.');
+        console.error('Erro geral:', erro);
         carregarDadosExemplo();
     }
 }
 
-// Função para processar a resposta XML - VERSÃO DEBUG
+// Funções auxiliares para formatar datas
+function formatarDataPT(data) {
+    const dia = data.getDate().toString().padStart(2, '0');
+    const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+    const ano = data.getFullYear();
+    return `${dia}/${mes}/${ano}`;
+}
+
+function formatarDataUS(data) {
+    const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+    const dia = data.getDate().toString().padStart(2, '0');
+    const ano = data.getFullYear();
+    return `${mes}/${dia}/${ano}`;
+}
+
+function formatarDataNumero(data) {
+    const ano = data.getFullYear();
+    const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+    const dia = data.getDate().toString().padStart(2, '0');
+    return `${ano}${mes}${dia}`;
+}
+
+// Função para processar resposta (versão simplificada)
 function processarResposta(xmlText) {
-    console.log('========== XML COMPLETO ==========');
-    console.log(xmlText); // Mostra o XML inteiro
-    console.log('==================================');
+    console.log('\n========== RESPOSTA DA API ==========');
+    console.log(xmlText.substring(0, 1000));
+    console.log('======================================\n');
     
-    // Tenta mostrar de forma mais legível
-    try {
-        // Mostra os primeiros 1000 caracteres se for muito grande
-        if (xmlText.length > 1000) {
-            console.log('PRIMEIROS 1000 CARACTERES:');
-            console.log(xmlText.substring(0, 1000));
-            console.log('... (resto omitido) ...');
-        }
-        
-        // Tenta fazer parse para ver a estrutura
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-        
-        // Verifica se há erro de parse
-        const parseError = xmlDoc.querySelector('parsererror');
-        if (parseError) {
-            console.log('❌ Erro no parse do XML');
-            console.log('Mensagem de erro:', parseError.textContent);
-        } else {
-            console.log('✅ XML parseado com sucesso!');
-            
-            // Lista todas as tags encontradas
-            const todasTags = xmlDoc.getElementsByTagName('*');
-            const tagsUnicas = new Set();
-            Array.from(todasTags).forEach(tag => tagsUnicas.add(tag.tagName));
-            console.log('📌 Tags encontradas:', Array.from(tagsUnicas));
-            
-            // Mostra o primeiro elemento de cada tipo
-            tagsUnicas.forEach(tag => {
-                const elementos = xmlDoc.getElementsByTagName(tag);
-                if (elementos.length > 0) {
-                    console.log(`Primeiro <${tag}>:`, elementos[0].textContent?.substring(0, 100));
-                }
-            });
-        }
-    } catch (e) {
-        console.log('Erro ao processar XML:', e);
-    }
-    
-    // Por enquanto, usa dados de exemplo
-    console.log('⚠️ A usar dados de exemplo até ajustarmos o parser');
+    // Mesmo com sucesso, por enquanto usamos dados de exemplo
+    // até vermos a estrutura real
+    console.log('⚠️ Por enquanto, a usar dados de exemplo');
     carregarDadosExemplo();
 }
-    
-    // Tenta encontrar a estrutura dos dados
-    const todosElementos = xmlDoc.getElementsByTagName('*');
-    const camposEncontrados = new Set();
-    Array.from(todosElementos).forEach(el => camposEncontrados.add(el.tagName));
-    
-    console.log('📊 Campos encontrados no XML:', Array.from(camposEncontrados));
-    
-    // Tenta identificar onde estão os registos
-    let registos = [];
-    
-    // Procura por padrões comuns
-    const possiveisTabelas = ['Table', 'row', 'Record', 'Item', 'Ordem', 'OS', 'Reparacao'];
-    
-    for (let tag of possiveisTabelas) {
-        const elementos = xmlDoc.getElementsByTagName(tag);
-        if (elementos.length > 0) {
-            console.log(`✅ Encontrados ${elementos.length} registos com tag <${tag}>`);
-            registos = Array.from(elementos);
-            break;
-        }
-    }
-    
-    // Se não encontrou, tenta os elementos filhos do root
-    if (registos.length === 0) {
-        const root = xmlDoc.documentElement;
-        if (root.children.length > 0) {
-            registos = Array.from(root.children);
-            console.log(`📦 Usando ${registos.length} elementos filhos do root`);
-        }
-    }
-    
-    // Converte para o formato do dashboard
-    if (registos.length > 0) {
-        dadosBrutos = converterRegistos(registos, Array.from(camposEncontrados));
-        ultimaAtualizacao = new Date();
-        atualizarInterface();
-        console.log(`✅ ${dadosBrutos.length} registos processados!`);
-    } else {
-        console.log('⚠️ Nenhum registo encontrado no XML');
-        carregarDadosExemplo();
-    }
-}
 
-// Função para converter registos XML para objeto
-function converterRegistos(registos, campos) {
-    return registos.map((registo, index) => {
-        // Função auxiliar para extrair valor
-        const getValor = (nomeCampo) => {
-            const elem = registo.querySelector(nomeCampo);
-            return elem ? elem.textContent : null;
-        };
-        
-        // Mapeamento baseado nos campos encontrados
-        const item = {
-            id: index + 1,
-            area: getValor('Area') || getValor('area') || getValor('DEPARTAMENTO') || 
-                  (campos.some(c => c.includes('Area')) ? 'Área' : 'Mobile Cliente'),
-            negocio: getValor('Negocio') || getValor('negocio') || getValor('TIPO_SERVICO') || 
-                     (campos.some(c => c.includes('Neg')) ? 'Negócio' : 'Garantias'),
-            status: getValor('Status') || getValor('status') || getValor('SITUACAO') || 'concluido',
-            data_entrada: getValor('DataEntrada') || getValor('data_entrada') || getValor('DT_ABERTURA') || 
-                          new Date().toISOString().split('T')[0],
-            data_saida: getValor('DataSaida') || getValor('data_saida') || getValor('DT_FECHO'),
-            tecnico: getValor('Tecnico') || getValor('tecnico') || getValor('RESPONSAVEL') || 'Técnico',
-            satisfacao: parseInt(getValor('NSS') || getValor('satisfacao') || getValor('NOTA')) || 
-                       Math.floor(Math.random() * 2) + 4,
-            sucesso: getValor('Sucesso') === 'true' || getValor('reparado') === 'true' || 
-                    getValor('STATUS') === 'Concluido' || Math.random() > 0.1
-        };
-        
-        // Calcula tempo de reparo
-        if (item.data_saida && item.data_entrada) {
-            const entrada = new Date(item.data_entrada);
-            const saida = new Date(item.data_saida);
-            item.tempo_reparo = Math.max(0.1, Math.round((saida - entrada) / (1000 * 60 * 60 * 24) * 10) / 10);
-        } else {
-            item.tempo_reparo = Math.random() * 5;
-        }
-        
-        return item;
-    });
-}
-
-// Função para calcular KPIs (igual à anterior)
+// Função para calcular KPIs (igual à anterior - mantém-se)
 function calcularKPIs() {
     const kpis = {
         mobileCliente: { total: 0, Garantias: { entradas:0,tat:0,sucesso:0,nss:0,produtividade:0,somaTat:0,somaNss:0,countSucesso:0,countProd:0 },
@@ -325,7 +182,6 @@ function calcularKPIs() {
 function atualizarInterface() {
     const kpis = calcularKPIs();
     
-    // KPIs Globais
     let totalEntradas = 0, somaTat = 0, somaSucesso = 0, somaNss = 0, somaProd = 0, count = 0;
     
     Object.values(kpis).forEach(area => {
@@ -350,7 +206,6 @@ function atualizarInterface() {
     document.getElementById('nssMedio').textContent = count > 0 ? (somaNss / count).toFixed(1) : '0';
     document.getElementById('produtividadeGlobal').textContent = count > 0 ? Math.round(somaProd / count) : '0';
     
-    // Atualiza totais por área
     document.getElementById('totalMobileCliente').textContent = kpis.mobileCliente?.total || 0;
     document.getElementById('totalMobileDG').textContent = kpis.mobileDG?.total || 0;
     document.getElementById('totalInformatica').textContent = kpis.informatica?.total || 0;
@@ -358,7 +213,6 @@ function atualizarInterface() {
     document.getElementById('totalSomImagem').textContent = kpis.somImagem?.total || 0;
     document.getElementById('totalEntretenimento').textContent = kpis.entretenimento?.total || 0;
     
-    // Atualiza cada negócio
     atualizarNegocio('mobileCliente', 'Garantias', kpis.mobileCliente?.Garantias);
     atualizarNegocio('mobileCliente', 'ForaGarantia', kpis.mobileCliente?.ForaGarantia);
     atualizarNegocio('mobileCliente', 'Extensao', kpis.mobileCliente?.Extensao);
@@ -376,7 +230,6 @@ function atualizarInterface() {
     atualizarNegocio('entretenimento', 'ForaGarantia', kpis.entretenimento?.ForaGarantia);
     atualizarNegocio('entretenimento', 'Extensao', kpis.entretenimento?.Extensao);
     
-    // Rodapé
     document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
     document.getElementById('emAndamento').textContent = dadosBrutos.filter(d => d.status !== 'concluido').length;
     document.getElementById('concluidasHoje').textContent = dadosBrutos.filter(d => {
@@ -388,7 +241,6 @@ function atualizarInterface() {
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
 }
 
-// Função auxiliar para atualizar negócio
 function atualizarNegocio(areaPrefix, negocio, stats) {
     const prefix = areaPrefix === 'mobile' ? 'mobileDG' : 
                    areaPrefix === 'pequenos' ? 'pequenos' : areaPrefix;
@@ -404,17 +256,6 @@ function atualizarNegocio(areaPrefix, negocio, stats) {
     if (sucesso) sucesso.textContent = stats?.sucesso || '0';
     if (nss) nss.textContent = stats?.nss ? stats.nss.toFixed(1) : '0';
     if (prod) prod.textContent = stats?.produtividade || '0';
-}
-
-// Função para exibir erro
-function exibirErro(mensagem) {
-    if (!document.querySelector('.erro-mensagem')) {
-        const erroDiv = document.createElement('div');
-        erroDiv.className = 'erro-mensagem';
-        erroDiv.innerHTML = `⚠️ ${mensagem}`;
-        erroDiv.style.cssText = 'background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; margin: 10px 0; border: 1px solid #ffeeba; text-align:center; font-weight:500;';
-        document.querySelector('.dashboard-header').appendChild(erroDiv);
-    }
 }
 
 // Dados de exemplo
@@ -472,5 +313,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     buscarDadosAPI();
-    setInterval(buscarDadosAPI, 5 * 60 * 1000);
 });
