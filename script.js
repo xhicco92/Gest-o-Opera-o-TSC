@@ -2,6 +2,7 @@
 let dadosBrutos = [];
 let ultimaAtualizacao = null;
 let cabecalhosOriginais = [];
+let dadosCarregados = false;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,12 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('periodoSelect').addEventListener('change', (e) => {
         console.log('Período alterado:', e.target.value);
-        carregarDadosExemplo();
+        // Não faz nada - só atualiza quando carregar ficheiro
     });
     
-    setTimeout(() => {
-        carregarDadosExemplo();
-    }, 100);
+    // NÃO carrega dados de exemplo - tudo a 0
+    ultimaAtualizacao = new Date();
+    document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
+    document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
+    
+    console.log('✅ Dashboard pronto - aguardando ficheiro Excel');
 });
 
 // Função para criar a estrutura das áreas
@@ -117,7 +121,7 @@ function criarEstruturaAreas() {
                 kpisHTML += `
                     <div class="mini-kpi">
                         <span class="mini-label">${campo.label}</span>
-                        <span class="mini-value" id="${id}">-</span>
+                        <span class="mini-value" id="${id}">0</span>
                     </div>
                 `;
             });
@@ -136,7 +140,7 @@ function criarEstruturaAreas() {
         });
     });
     
-    console.log('✅ Estrutura de áreas criada');
+    console.log('✅ Estrutura de áreas criada (tudo a 0)');
 }
 
 // Adicionar botão de upload
@@ -164,23 +168,29 @@ async function handleFileUpload(event) {
     if (!file) return;
     
     console.log('📂 Ficheiro selecionado:', file.name);
+    dadosCarregados = true;
     
     try {
         document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> A processar...';
         
         const data = await lerFicheiroExcel(file);
-        processarDadosExcel(data);
+        const sucesso = processarDadosExcel(data);
         
         event.target.value = '';
         
-        ultimaAtualizacao = new Date();
-        document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
-        
-        console.log('✅ Dados processados com sucesso!');
+        if (sucesso) {
+            ultimaAtualizacao = new Date();
+            document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
+            console.log('✅ Dados reais processados com sucesso!');
+        } else {
+            console.log('⚠️ Falha ao processar dados reais');
+            dadosCarregados = false;
+        }
         
     } catch (erro) {
         console.error('❌ Erro ao processar ficheiro:', erro);
         alert('Erro ao processar o ficheiro. Certifique-se que é um Excel válido.');
+        dadosCarregados = false;
     } finally {
         document.getElementById('btnAtualizar').innerHTML = '<span class="material-icons">refresh</span> Carregar Excel';
     }
@@ -220,23 +230,22 @@ async function lerFicheiroExcel(file) {
     });
 }
 
-// Processar dados do Excel (COM ÍNDICES CORRIGIDOS)
+// Processar dados do Excel
 function processarDadosExcel(dados) {
     if (!dados || dados.length < 2) {
         console.log('⚠️ Ficheiro sem dados suficientes');
-        carregarDadosExemplo();
-        return;
+        return false;
     }
     
     const cabecalhos = dados[0];
     cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Índices fixos conforme especificado:
-    const idxTipologia = 33; // Coluna 34 do Excel (índice 33 em JS)
-    const idxTipoGarantia = 8; // Coluna 9 do Excel (índice 8 em JS)
+    // Índices fixos
+    const idxTipologia = 33; // Coluna 34
+    const idxTipoGarantia = 8; // Coluna 9
     
-    // Encontrar outros índices automaticamente
+    // Encontrar outros índices
     const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint', 'Estado']);
     const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça']);
     const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin']);
@@ -250,7 +259,7 @@ function processarDadosExcel(dados) {
     });
     
     // Processar dados
-    dadosBrutos = [];
+    const novosDados = [];
     let linhasIgnoradas = 0;
     
     for (let i = 1; i < dados.length; i++) {
@@ -287,7 +296,7 @@ function processarDadosExcel(dados) {
         // Determinar se pendente peça é Sim/Não
         const isPendentePeca = pendentePeca.includes('sim') || pendentePeca === 's' || pendentePeca === '1';
         
-        // Mapear tipo_garantia para negócio (Garantias, ForaGarantia, Extensao)
+        // Mapear tipo_garantia para negócio
         let negocio = 'Outros';
         const tg = tipoGarantia.toLowerCase();
         
@@ -299,21 +308,20 @@ function processarDadosExcel(dados) {
             negocio = 'Extensão de Garantia';
         }
         
-        // Determinar a área com base na tipologia e tipo_garantia
+        // Determinar a área
         let areaNorm = null;
         const tipologiaUpper = tipologia.toUpperCase();
         
-        // Regras para Mobile
+        // Mobile
         if (tipologiaUpper.includes('MOBILE')) {
             if (tg.includes('seguro d&g')) {
                 areaNorm = 'Mobile D&G';
-                negocio = 'D&G'; // D&G é negócio especial
+                negocio = 'D&G';
             } else if (!tg.includes('flex premium') && !tg.includes('seguro d&g')) {
                 areaNorm = 'Mobile Cliente';
-                // Mantém o negócio já definido (Garantias/Fora/Extensao)
             }
         }
-        // Outras áreas (não Mobile)
+        // Outras áreas
         else if (tipologiaUpper.includes('INFORMATICA') || tipologiaUpper.includes('PC') || tipologiaUpper.includes('NOTEBOOK')) {
             areaNorm = 'Informática';
         } else if (tipologiaUpper.includes('DOMESTICO') || tipologiaUpper.includes('PDA') || tipologiaUpper.includes('ELECTRO')) {
@@ -326,7 +334,7 @@ function processarDadosExcel(dados) {
         
         // Só adicionar se a área foi identificada
         if (areaNorm) {
-            dadosBrutos.push({
+            novosDados.push({
                 area: areaNorm,
                 negocio: negocio,
                 checkpoint: checkpoint.toLowerCase(),
@@ -336,22 +344,21 @@ function processarDadosExcel(dados) {
         }
     }
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos (${linhasIgnoradas} ignorados por erro de data)`);
-    
-    // Mostrar estatísticas
-    const contagemAreas = {};
-    dadosBrutos.forEach(item => {
-        contagemAreas[item.area] = (contagemAreas[item.area] || 0) + 1;
-    });
-    console.log('📊 Distribuição por área:', contagemAreas);
-    
-    if (dadosBrutos.length > 0) {
-        ultimaAtualizacao = new Date();
-        calcularEMostrarMetricas();
-    } else {
-        console.log('⚠️ Nenhum registo válido encontrado');
-        carregarDadosExemplo();
+    if (novosDados.length === 0) {
+        console.log('⚠️ Nenhum registo válido encontrado no ficheiro');
+        return false;
     }
+    
+    // Substituir dados
+    dadosBrutos = novosDados;
+    
+    console.log(`✅ Processados ${dadosBrutos.length} registos do ficheiro`);
+    console.log('📊 Distribuição por área:', contarPorArea(dadosBrutos));
+    
+    // Atualizar dashboard
+    calcularEMostrarMetricas();
+    
+    return true;
 }
 
 // Função auxiliar para encontrar índice
@@ -366,6 +373,15 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
         }
     }
     return -1;
+}
+
+// Função auxiliar para contar por área
+function contarPorArea(dados) {
+    const contagem = {};
+    dados.forEach(item => {
+        contagem[item.area] = (contagem[item.area] || 0) + 1;
+    });
+    return contagem;
 }
 
 // Função para calcular as métricas
@@ -383,6 +399,7 @@ function calcularMetricas() {
     const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
     const estadosDebito = ['debit', 'débito', 'debito'];
 
+    // Inicializar tudo a zero
     const metricas = {
         'Mobile Cliente': {
             'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
@@ -542,7 +559,7 @@ function calcularEMostrarMetricas() {
     console.log(`📊 Elementos atualizados: ${elementosEncontrados}/${elementosTotal}`);
     
     // KPIs globais
-    let totalAnalises = 0, somaTatGlobal = 0, countTatGlobal = 0, totalOrcamentos = 0, totalAguarda = 0;
+    let totalAnalises = 0, somaTatGlobal = 0, countTatGlobal = 0, totalOrcamentos = 0, totalAguarda = 0, totalDebitos = 0;
     
     Object.values(metricas).forEach(area => {
         Object.values(area).forEach(neg => {
@@ -551,6 +568,7 @@ function calcularEMostrarMetricas() {
             countTatGlobal += neg.countTat || 0;
             totalOrcamentos += neg.orcamento || 0;
             totalAguarda += neg.agAceitacao || 0;
+            totalDebitos += neg.debitos || 0;
         });
     });
     
@@ -562,55 +580,20 @@ function calcularEMostrarMetricas() {
     
     // Rodapé
     document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
-    document.getElementById('emAndamento').textContent = dadosBrutos.filter(item => 
-        ['análise', 'intervenção', 'orçamento', 'aguarda'].some(s => item.checkpoint.includes(s))
+    
+    const estadosAbertos = ['análise', 'intervenção', 'orçamento', 'aguarda'];
+    const emAberto = dadosBrutos.filter(item => 
+        estadosAbertos.some(s => item.checkpoint.includes(s))
     ).length;
+    document.getElementById('emAndamento').textContent = emAberto;
+    
     document.getElementById('concluidasHoje').textContent = '-';
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? ultimaAtualizacao.toLocaleString('pt-PT') : '-';
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
     
-    console.log('✅ Dashboard atualizado!');
-}
-
-// Dados de exemplo (fallback)
-function carregarDadosExemplo() {
-    console.log('🔄 Carregando dados de exemplo...');
-    
-    dadosBrutos = [];
-    
-    const configAreas = [
-        { nome: 'Mobile Cliente', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        { nome: 'Mobile D&G', negocios: ['D&G'] },
-        { nome: 'Informática', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        { nome: 'Pequenos Domésticos', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        { nome: 'Som e Imagem', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        { nome: 'Entretenimento', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] }
-    ];
-    
-    const checkpoints = ['análise técnica', 'intervenção técnica', 'orçamento', 'aguarda aceitação orçamento', 'nível 3', 'pré-análise', 'controlo de qualidade', 'debit'];
-    
-    let id = 1;
-    configAreas.forEach(config => {
-        config.negocios.forEach(negocio => {
-            const numRegistos = 20 + Math.floor(Math.random() * 20);
-            
-            for (let i = 0; i < numRegistos; i++) {
-                const checkpoint = checkpoints[Math.floor(Math.random() * checkpoints.length)];
-                
-                dadosBrutos.push({
-                    id: id++,
-                    area: config.nome,
-                    negocio: negocio,
-                    checkpoint: checkpoint,
-                    pendente_peca: Math.random() > 0.7,
-                    tat: Math.random() * 15
-                });
-            }
-        });
-    });
-    
-    console.log(`✅ Gerados ${dadosBrutos.length} registos de exemplo`);
-    
-    ultimaAtualizacao = new Date();
-    calcularEMostrarMetricas();
+    if (dadosBrutos.length > 0) {
+        console.log('✅ Dashboard atualizado com DADOS REAIS');
+    } else {
+        console.log('✅ Dashboard atualizado (sem dados - tudo a 0)');
+    }
 }
