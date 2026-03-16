@@ -234,7 +234,7 @@ async function lerFicheiroExcel(file) {
     });
 }
 
-// Processar dados do Excel
+// Processar dados do Excel (SEM FILTRO DE POLO - MOSTRA TUDO)
 function processarDadosExcel(dados) {
     if (!dados || dados.length < 2) {
         console.log('⚠️ Ficheiro sem dados suficientes');
@@ -251,7 +251,6 @@ function processarDadosExcel(dados) {
     const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint', 'Estado', 'status']);
     const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça', 'aguarda peça']);
     const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin', 'Data Entrada']);
-    const idxPolo = encontrarIndice(cabecalhos, ['polo', 'Polo', 'unidade']);
     const idxTipoGarantia = 8; // Coluna I
     
     console.log('📍 Mapeamento:', {
@@ -259,23 +258,17 @@ function processarDadosExcel(dados) {
         checkpoint: idxCheckpoint,
         pendente_peca: idxPendentePeca,
         data_checkin: idxDataCheckin,
-        polo: idxPolo,
         tipo_garantia: idxTipoGarantia
     });
     
     // Processar dados
     dadosBrutos = [];
+    let linhasIgnoradas = 0;
     
     for (let i = 1; i < dados.length; i++) {
         const linha = dados[i];
         if (!linha || linha.length === 0) continue;
         if (linha.every(cell => !cell || cell === '')) continue;
-        
-        // Filtrar TSC South
-        const polo = idxPolo !== -1 ? String(linha[idxPolo] || '').toLowerCase() : '';
-        if (!polo.includes('tsc south') && !polo.includes('south')) {
-            continue;
-        }
         
         // Extrair valores
         const tipologia = idxTipologia !== -1 ? String(linha[idxTipologia] || '') : '';
@@ -298,7 +291,9 @@ function processarDadosExcel(dados) {
                     const hoje = new Date();
                     tat = Math.abs(hoje - dataEntrada) / (1000 * 60 * 60 * 24);
                 }
-            } catch (e) {}
+            } catch (e) {
+                linhasIgnoradas++;
+            }
         }
         
         // Determinar se pendente peça é Sim/Não
@@ -352,12 +347,20 @@ function processarDadosExcel(dados) {
         });
     }
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos`);
+    console.log(`✅ Processados ${dadosBrutos.length} registos (${linhasIgnoradas} ignorados por erro de data)`);
+    
+    // Mostrar estatísticas
+    const contagemAreas = {};
+    dadosBrutos.forEach(item => {
+        contagemAreas[item.area] = (contagemAreas[item.area] || 0) + 1;
+    });
+    console.log('📊 Distribuição por área:', contagemAreas);
     
     if (dadosBrutos.length > 0) {
         ultimaAtualizacao = new Date();
         calcularEMostrarMetricas();
     } else {
+        console.log('⚠️ Nenhum registo válido encontrado');
         carregarDadosExemplo();
     }
 }
@@ -376,25 +379,23 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
     return -1;
 }
 
-// Função para calcular as métricas (CORRIGIDA)
+// Função para calcular as métricas (CORRIGIDA com seus dados reais)
 function calcularMetricas() {
-    // Mapeamento exato dos estados conforme especificado
-    const estadosAnalise = ['análise técnica', 'analise tecnica', 'análise', 'analise'];
-    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'reparação', 'reparacao'];
+    // Estados EXATOS que aparecem nos seus dados
+    const estadosAnalise = ['pré-análise', 'pre-analise'];
+    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica'];
     const estadosTAT = [
-        'análise técnica', 'analise tecnica', 
-        'intervenção técnica', 'intervencao tecnica', 
-        'orçamento', 'orcamento', 
+        'pré-análise', 'pre-analise',
+        'intervenção técnica', 'intervencao tecnica',
+        'orçamento', 'orcamento',
         'aguarda aceitação orçamento', 'aguarda aceitacao orcamento',
-        'nível 3', 'nivel 3', 
-        'pré-análise', 'pre-analise', 
-        'controlo de qualidade'
+        'debit', 'débito', 'debito'
     ];
     const estadosOrcamento = ['orçamento', 'orcamento'];
     const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
     const estadosDebito = ['debit', 'débito', 'debito'];
 
-    // Inicializar métricas com zero
+    // Inicializar métricas
     const metricas = {
         'Mobile Cliente': {
             'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
@@ -426,44 +427,27 @@ function calcularMetricas() {
         }
     };
 
-    // DEBUG: mostrar os primeiros registos para verificar
-    console.log('🔍 Processando registos. Amostra:');
-    dadosBrutos.slice(0, 5).forEach((item, i) => {
-        console.log(`Registo ${i}:`, {
-            area: item.area,
-            negocio: item.negocio,
-            checkpoint: item.checkpoint,
-            pendente_peca: item.pendente_peca,
-            tat: item.tat
-        });
-    });
+    console.log('🔍 Processando registos reais...');
 
     // Processar cada registo
     dadosBrutos.forEach(item => {
         const area = item.area;
         const negocio = item.negocio;
         
-        // Verificar se a área e negócio existem na estrutura
         if (!metricas[area] || !metricas[area][negocio]) {
-            console.log(`⚠️ Combinação ignorada: ${area} - ${negocio}`);
             return;
         }
         
         const stats = metricas[area][negocio];
-        const checkpoint = item.checkpoint.toLowerCase().trim();
+        const checkpoint = item.checkpoint ? item.checkpoint.toLowerCase().trim() : '';
         
-        // DEBUG: mostrar alguns checkpoints para verificar
-        if (Math.random() < 0.01) { // 1% dos registos
-            console.log(`Checkpoint: "${checkpoint}"`);
-        }
-        
-        // Análises
-        if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
+        // Análises (pré-análise)
+        if (checkpoint.includes('pré') || checkpoint.includes('pre-analise')) {
             stats.analises++;
         }
         
-        // Reparação
-        if (estadosReparacao.some(estado => checkpoint.includes(estado))) {
+        // Reparação (intervenção técnica)
+        if (checkpoint.includes('intervenção') || checkpoint.includes('intervencao')) {
             stats.reparacao++;
             if (item.pendente_peca) {
                 stats.repPendentePeca++;
@@ -472,24 +456,22 @@ function calcularMetricas() {
             }
         }
         
-        // TAT Aberto (soma para cálculo da média)
-        if (estadosTAT.some(estado => checkpoint.includes(estado))) {
-            stats.somaTat += item.tat;
-            stats.countTat++;
-        }
+        // TAT Aberto - para todos os estados (têm TAT)
+        stats.somaTat += item.tat || 0;
+        stats.countTat++;
         
         // Orçamento
-        if (estadosOrcamento.some(estado => checkpoint.includes(estado))) {
+        if (checkpoint.includes('orçamento') || checkpoint.includes('orcamento')) {
             stats.orcamento++;
         }
         
         // Aguarda Aceitação
-        if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
+        if (checkpoint.includes('aguarda')) {
             stats.agAceitacao++;
         }
         
         // Débitos
-        if (estadosDebito.some(estado => checkpoint.includes(estado))) {
+        if (checkpoint.includes('debit')) {
             stats.debitos++;
         }
     });
@@ -501,10 +483,25 @@ function calcularMetricas() {
             if (stats.countTat > 0) {
                 stats.tatAberto = Math.round((stats.somaTat / stats.countTat) * 10) / 10;
             }
-            
-            // DEBUG: mostrar totais por área/negócio
-            if (stats.analises > 0) {
-                console.log(`📊 ${area} - ${negocio}: Análises=${stats.analises}, Reparação=${stats.reparacao}, TAT=${stats.tatAberto}`);
+        });
+    });
+
+    // DEBUG: mostrar totais
+    console.log('📊 TOTAIS CALCULADOS:');
+    Object.keys(metricas).forEach(area => {
+        Object.keys(metricas[area]).forEach(negocio => {
+            const stats = metricas[area][negocio];
+            if (stats.analises > 0 || stats.reparacao > 0) {
+                console.log(`${area} - ${negocio}:`, {
+                    Análises: stats.analises,
+                    Reparação: stats.reparacao,
+                    'Pendentes Peça': stats.repPendentePeca,
+                    'Não Pendentes': stats.repNaoPendentePeca,
+                    'TAT Aberto': stats.tatAberto,
+                    Orçamentos: stats.orcamento,
+                    'Ag.Aceitação': stats.agAceitacao,
+                    Débitos: stats.debitos
+                });
             }
         });
     });
@@ -512,12 +509,11 @@ function calcularMetricas() {
     return metricas;
 }
 
-// Função para mostrar métricas (CORRIGIDA - apenas combinações válidas)
+// Função para mostrar métricas 
 function calcularEMostrarMetricas() {
     console.log('🔄 Atualizando dashboard com métricas...');
     
     const metricas = calcularMetricas();
-    console.log('📊 Métricas calculadas:', metricas);
     
     // Mapeamento de nomes para IDs
     const mapaIds = {
@@ -538,21 +534,14 @@ function calcularEMostrarMetricas() {
     
     // Definir as combinações válidas de área + negócio
     const combinacoesValidas = [
-        // Mobile Cliente
         { area: 'Mobile Cliente', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        // Mobile D&G (apenas D&G)
         { area: 'Mobile D&G', negocios: ['D&G'] },
-        // Informática
         { area: 'Informática', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        // Pequenos Domésticos
         { area: 'Pequenos Domésticos', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        // Som e Imagem
         { area: 'Som e Imagem', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
-        // Entretenimento
         { area: 'Entretenimento', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] }
     ];
     
-    // Atualizar apenas as combinações válidas
     combinacoesValidas.forEach(combo => {
         const area = combo.area;
         const areaMetricas = metricas[area];
@@ -589,13 +578,10 @@ function calcularEMostrarMetricas() {
                 if (element) {
                     element.textContent = campo.valor;
                     elementosEncontrados++;
-                } else {
-                    console.log(`⚠️ Elemento não encontrado (deveria existir): ${campo.id}`);
                 }
             });
         });
         
-        // Atualizar total da área
         const totalId = area === 'Mobile D&G' ? 'totalMobileDG' : 
                        `total${area.replace(' ', '').replace('&', '')}`;
         const totalElement = document.getElementById(totalId);
@@ -647,13 +633,12 @@ function calcularEMostrarMetricas() {
     console.log('✅ Dashboard atualizado!');
 }
 
-// Dados de exemplo (CORRIGIDO - distribuição realista)
+// Dados de exemplo (fallback)
 function carregarDadosExemplo() {
     console.log('🔄 Carregando dados de exemplo...');
     
     dadosBrutos = [];
     
-    // Distribuição realista: Mobile D&G só tem negócio D&G, outras áreas têm Garantias/Fora/Extensão
     const configAreas = [
         { nome: 'Mobile Cliente', negocios: ['Garantias', 'Fora de Garantia', 'Extensão de Garantia'] },
         { nome: 'Mobile D&G', negocios: ['D&G'] },
@@ -668,7 +653,6 @@ function carregarDadosExemplo() {
     let id = 1;
     configAreas.forEach(config => {
         config.negocios.forEach(negocio => {
-            // Gerar entre 20-40 registos por combinação área+negócio
             const numRegistos = 20 + Math.floor(Math.random() * 20);
             
             for (let i = 0; i < numRegistos; i++) {
