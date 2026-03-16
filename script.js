@@ -17,10 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('periodoSelect').addEventListener('change', (e) => {
         console.log('Período alterado:', e.target.value);
-        // Não faz nada - só atualiza quando carregar ficheiro
     });
     
-    // NÃO carrega dados de exemplo - tudo a 0
     ultimaAtualizacao = new Date();
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao.toLocaleString('pt-PT');
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
@@ -230,7 +228,7 @@ async function lerFicheiroExcel(file) {
     });
 }
 
-// Processar dados do Excel
+// Processar dados do Excel - VERSÃO CORRIGIDA (checkpoint = coluna 14)
 function processarDadosExcel(dados) {
     if (!dados || dados.length < 2) {
         console.log('⚠️ Ficheiro sem dados suficientes');
@@ -244,9 +242,9 @@ function processarDadosExcel(dados) {
     // Índices fixos
     const idxTipologia = 33; // Coluna 34
     const idxTipoGarantia = 8; // Coluna 9
+    const idxCheckpoint = 13; // Coluna 14 do Excel (ÍNDICE CORRETO!)
     
     // Encontrar outros índices
-    const idxCheckpoint = encontrarIndice(cabecalhos, ['checkpoint_atual', 'checkpoint', 'Estado']);
     const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça']);
     const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin']);
     
@@ -270,9 +268,12 @@ function processarDadosExcel(dados) {
         // Extrair valores
         const tipologia = linha[idxTipologia] ? String(linha[idxTipologia]) : '';
         const tipoGarantia = linha[idxTipoGarantia] ? String(linha[idxTipoGarantia]) : '';
-        const checkpoint = idxCheckpoint !== -1 ? String(linha[idxCheckpoint] || '') : '';
+        const checkpointRaw = linha[idxCheckpoint] ? String(linha[idxCheckpoint]) : '';
         const pendentePeca = idxPendentePeca !== -1 ? String(linha[idxPendentePeca] || '').toLowerCase() : '';
         const dataCheckin = idxDataCheckin !== -1 ? linha[idxDataCheckin] : null;
+        
+        // Converter checkpoint para minúsculas e remover espaços extras
+        const checkpoint = checkpointRaw.toLowerCase().trim();
         
         // Calcular TAT
         let tat = 0;
@@ -313,7 +314,7 @@ function processarDadosExcel(dados) {
         const tipologiaUpper = tipologia.toUpperCase();
         
         // Mobile
-        if (tipologiaUpper.includes('MOBILE')) {
+        if (tipologiaUpper.includes('MOBILE') || tipologiaUpper.includes('MÓVEL')) {
             if (tg.includes('seguro d&g')) {
                 areaNorm = 'Mobile D&G';
                 negocio = 'D&G';
@@ -321,14 +322,26 @@ function processarDadosExcel(dados) {
                 areaNorm = 'Mobile Cliente';
             }
         }
-        // Outras áreas
-        else if (tipologiaUpper.includes('INFORMATICA') || tipologiaUpper.includes('PC') || tipologiaUpper.includes('NOTEBOOK')) {
+        // Informática
+        else if (tipologiaUpper.includes('INFORMATICA') || tipologiaUpper.includes('PC') || 
+                 tipologiaUpper.includes('NOTEBOOK') || tipologiaUpper.includes('COMPUTADOR')) {
             areaNorm = 'Informática';
-        } else if (tipologiaUpper.includes('DOMESTICO') || tipologiaUpper.includes('PDA') || tipologiaUpper.includes('ELECTRO')) {
+        }
+        // Pequenos Domésticos
+        else if (tipologiaUpper.includes('DOMESTICO') || tipologiaUpper.includes('PDA') || 
+                 tipologiaUpper.includes('ELECTRO') || tipologiaUpper.includes('PEQUENO')) {
             areaNorm = 'Pequenos Domésticos';
-        } else if (tipologiaUpper.includes('SOM') || tipologiaUpper.includes('IMAGEM') || tipologiaUpper.includes('TV') || tipologiaUpper.includes('AUDIO')) {
+        }
+        // Som e Imagem
+        else if (tipologiaUpper.includes('SOM') || tipologiaUpper.includes('IMAGEM') || 
+                 tipologiaUpper.includes('TV') || tipologiaUpper.includes('AUDIO') ||
+                 tipologiaUpper.includes('VIDEO')) {
             areaNorm = 'Som e Imagem';
-        } else if (tipologiaUpper.includes('ENTRETENIMENTO') || tipologiaUpper.includes('GAMING') || tipologiaUpper.includes('CONSOLA')) {
+        }
+        // Entretenimento
+        else if (tipologiaUpper.includes('ENTRETENIMENTO') || tipologiaUpper.includes('GAMING') || 
+                 tipologiaUpper.includes('CONSOLA') || tipologiaUpper.includes('PLAYSTATION') ||
+                 tipologiaUpper.includes('XBOX') || tipologiaUpper.includes('NINTENDO')) {
             areaNorm = 'Entretenimento';
         }
         
@@ -337,7 +350,7 @@ function processarDadosExcel(dados) {
             novosDados.push({
                 area: areaNorm,
                 negocio: negocio,
-                checkpoint: checkpoint.toLowerCase(),
+                checkpoint: checkpoint,
                 pendente_peca: isPendentePeca,
                 tat: tat
             });
@@ -353,7 +366,17 @@ function processarDadosExcel(dados) {
     dadosBrutos = novosDados;
     
     console.log(`✅ Processados ${dadosBrutos.length} registos do ficheiro`);
-    console.log('📊 Distribuição por área:', contarPorArea(dadosBrutos));
+    
+    // Mostrar estatísticas detalhadas
+    const contagemAreas = {};
+    const contagemCheckpoints = {};
+    dadosBrutos.forEach(item => {
+        contagemAreas[item.area] = (contagemAreas[item.area] || 0) + 1;
+        contagemCheckpoints[item.checkpoint] = (contagemCheckpoints[item.checkpoint] || 0) + 1;
+    });
+    
+    console.log('📊 Distribuição por área:', contagemAreas);
+    console.log('📌 Checkpoints encontrados:', contagemCheckpoints);
     
     // Atualizar dashboard
     calcularEMostrarMetricas();
@@ -375,28 +398,13 @@ function encontrarIndice(cabecalhos, possiveisNomes) {
     return -1;
 }
 
-// Função auxiliar para contar por área
-function contarPorArea(dados) {
-    const contagem = {};
-    dados.forEach(item => {
-        contagem[item.area] = (contagem[item.area] || 0) + 1;
-    });
-    return contagem;
-}
-
 // Função para calcular as métricas
 function calcularMetricas() {
-    const estadosAnalise = ['pré-análise', 'pre-analise'];
-    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica'];
-    const estadosTAT = [
-        'pré-análise', 'pre-analise',
-        'intervenção técnica', 'intervencao tecnica',
-        'orçamento', 'orcamento',
-        'aguarda aceitação orçamento', 'aguarda aceitacao orcamento',
-        'debit', 'débito', 'debito'
-    ];
+    // Estados que podem aparecer nos checkpoints
+    const estadosAnalise = ['pré-análise', 'pre-analise', 'pré'];
+    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'intervenção', 'reparação'];
     const estadosOrcamento = ['orçamento', 'orcamento'];
-    const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento'];
+    const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento', 'aguarda'];
     const estadosDebito = ['debit', 'débito', 'debito'];
 
     // Inicializar tudo a zero
@@ -439,30 +447,36 @@ function calcularMetricas() {
         if (!metricas[area] || !metricas[area][negocio]) return;
         
         const stats = metricas[area][negocio];
-        const checkpoint = item.checkpoint.toLowerCase();
+        const checkpoint = String(item.checkpoint).toLowerCase();
         
-        if (checkpoint.includes('pré') || checkpoint.includes('pre-analise')) {
+        // Análises
+        if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
             stats.analises++;
         }
         
-        if (checkpoint.includes('intervenção') || checkpoint.includes('intervencao')) {
+        // Reparação
+        if (estadosReparacao.some(estado => checkpoint.includes(estado))) {
             stats.reparacao++;
             if (item.pendente_peca) stats.repPendentePeca++;
             else stats.repNaoPendentePeca++;
         }
         
+        // TAT
         stats.somaTat += item.tat || 0;
         stats.countTat++;
         
-        if (checkpoint.includes('orçamento') || checkpoint.includes('orcamento')) {
+        // Orçamento
+        if (estadosOrcamento.some(estado => checkpoint.includes(estado))) {
             stats.orcamento++;
         }
         
-        if (checkpoint.includes('aguarda')) {
+        // Aguarda
+        if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
             stats.agAceitacao++;
         }
         
-        if (checkpoint.includes('debit')) {
+        // Débitos
+        if (estadosDebito.some(estado => checkpoint.includes(estado))) {
             stats.debitos++;
         }
     });
