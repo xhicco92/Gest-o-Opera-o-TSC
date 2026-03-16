@@ -138,7 +138,7 @@ function criarEstruturaAreas() {
         });
     });
     
-    console.log('✅ Estrutura de áreas criada (tudo a 0)');
+    console.log('✅ Estrutura de áreas criada');
 }
 
 // Adicionar botão de upload
@@ -228,7 +228,7 @@ async function lerFicheiroExcel(file) {
     });
 }
 
-// Processar dados do Excel - VERSÃO CORRIGIDA (checkpoint = coluna 14)
+// Processar dados do Excel
 function processarDadosExcel(dados) {
     if (!dados || dados.length < 2) {
         console.log('⚠️ Ficheiro sem dados suficientes');
@@ -239,21 +239,21 @@ function processarDadosExcel(dados) {
     cabecalhosOriginais = cabecalhos;
     console.log('📊 Cabeçalhos encontrados:', cabecalhos);
     
-    // Índices fixos
-    const idxTipologia = 33; // Coluna 34
-    const idxTipoGarantia = 8; // Coluna 9
-    const idxCheckpoint = 13; // Coluna 14 do Excel (ÍNDICE CORRETO!)
-    
-    // Encontrar outros índices
-    const idxPendentePeca = encontrarIndice(cabecalhos, ['pendente_peca', 'Pendente Peça']);
-    const idxDataCheckin = encontrarIndice(cabecalhos, ['data_checkin', 'checkin']);
+    // Índices fixos baseados na identificação
+    const idxTipologia = 33; // Coluna AH - tipologia
+    const idxTipoGarantia = 8; // Coluna I - tipo_garantia
+    const idxCheckpoint = 13; // Coluna N - checkpoint_atual
+    const idxPendentePeca = 14; // Coluna O - pendente_peca
+    const idxDataCheckin = 10; // Coluna K - data_checkin
+    const idxPolo = 52; // Coluna BA - polo
     
     console.log('📍 Mapeamento:', {
         tipologia: idxTipologia,
         tipo_garantia: idxTipoGarantia,
         checkpoint: idxCheckpoint,
         pendente_peca: idxPendentePeca,
-        data_checkin: idxDataCheckin
+        data_checkin: idxDataCheckin,
+        polo: idxPolo
     });
     
     // Processar dados
@@ -265,15 +265,23 @@ function processarDadosExcel(dados) {
         if (!linha || linha.length === 0) continue;
         if (linha.every(cell => !cell || cell === '')) continue;
         
+        // Filtrar apenas TSC SOUTH
+        const polo = linha[idxPolo] ? String(linha[idxPolo]).toLowerCase() : '';
+        if (!polo.includes('tsc south')) {
+            continue;
+        }
+        
         // Extrair valores
         const tipologia = linha[idxTipologia] ? String(linha[idxTipologia]) : '';
         const tipoGarantia = linha[idxTipoGarantia] ? String(linha[idxTipoGarantia]) : '';
         const checkpointRaw = linha[idxCheckpoint] ? String(linha[idxCheckpoint]) : '';
-        const pendentePeca = idxPendentePeca !== -1 ? String(linha[idxPendentePeca] || '').toLowerCase() : '';
-        const dataCheckin = idxDataCheckin !== -1 ? linha[idxDataCheckin] : null;
+        const pendentePecaRaw = linha[idxPendentePeca] ? String(linha[idxPendentePeca]) : '';
+        const dataCheckin = linha[idxDataCheckin] ? linha[idxDataCheckin] : null;
         
-        // Converter checkpoint para minúsculas e remover espaços extras
-        const checkpoint = checkpointRaw.toLowerCase().trim();
+        // Normalizar valores
+        const checkpoint = checkpointRaw.trim();
+        const pendentePeca = pendentePecaRaw.toLowerCase().includes('sim');
+        const tg = tipoGarantia.toLowerCase();
         
         // Calcular TAT
         let tat = 0;
@@ -281,6 +289,7 @@ function processarDadosExcel(dados) {
             try {
                 let dataEntrada;
                 if (typeof dataCheckin === 'number') {
+                    // Data do Excel (dias desde 1900)
                     dataEntrada = new Date((dataCheckin - 25569) * 86400 * 1000);
                 } else {
                     dataEntrada = new Date(dataCheckin);
@@ -294,64 +303,49 @@ function processarDadosExcel(dados) {
             }
         }
         
-        // Determinar se pendente peça é Sim/Não
-        const isPendentePeca = pendentePeca.includes('sim') || pendentePeca === 's' || pendentePeca === '1';
-        
         // Mapear tipo_garantia para negócio
         let negocio = 'Outros';
-        const tg = tipoGarantia.toLowerCase();
         
-        if (tg.includes('pop') || tg.includes('stock de loja') || tg.includes('garantias')) {
+        if (tg.includes('pop') || tg.includes('stock de loja')) {
             negocio = 'Garantias';
+        } else if (tg.includes('eg+1') || tg.includes('eg+3')) {
+            negocio = 'Extensão de Garantia';
         } else if (tg.includes('fora de garantia') || tg.includes('instore mobility')) {
             negocio = 'Fora de Garantia';
-        } else if (tg.includes('eg+1') || tg.includes('eg+3') || tg.includes('extensão')) {
-            negocio = 'Extensão de Garantia';
+        } else if (tg.includes('seguro d&g')) {
+            negocio = 'D&G';
+        } else if (tg.includes('flex premium')) {
+            // Flex Premium não conta - ignorar
+            continue;
         }
         
-        // Determinar a área
+        // Determinar área com base na tipologia
         let areaNorm = null;
         const tipologiaUpper = tipologia.toUpperCase();
         
-        // Mobile
-        if (tipologiaUpper.includes('MOBILE') || tipologiaUpper.includes('MÓVEL')) {
-            if (tg.includes('seguro d&g')) {
+        if (tipologiaUpper.includes('MOBILE')) {
+            if (negocio === 'D&G') {
                 areaNorm = 'Mobile D&G';
-                negocio = 'D&G';
-            } else if (!tg.includes('flex premium') && !tg.includes('seguro d&g')) {
+            } else {
                 areaNorm = 'Mobile Cliente';
             }
-        }
-        // Informática
-        else if (tipologiaUpper.includes('INFORMATICA') || tipologiaUpper.includes('PC') || 
-                 tipologiaUpper.includes('NOTEBOOK') || tipologiaUpper.includes('COMPUTADOR')) {
+        } else if (tipologiaUpper.includes('INFORMATICA')) {
             areaNorm = 'Informática';
-        }
-        // Pequenos Domésticos
-        else if (tipologiaUpper.includes('DOMESTICO') || tipologiaUpper.includes('PDA') || 
-                 tipologiaUpper.includes('ELECTRO') || tipologiaUpper.includes('PEQUENO')) {
+        } else if (tipologiaUpper.includes('PEQUENOS DOMÉSTICOS') || tipologiaUpper.includes('PDA')) {
             areaNorm = 'Pequenos Domésticos';
-        }
-        // Som e Imagem
-        else if (tipologiaUpper.includes('SOM') || tipologiaUpper.includes('IMAGEM') || 
-                 tipologiaUpper.includes('TV') || tipologiaUpper.includes('AUDIO') ||
-                 tipologiaUpper.includes('VIDEO')) {
+        } else if (tipologiaUpper.includes('SOM E IMAGEM')) {
             areaNorm = 'Som e Imagem';
-        }
-        // Entretenimento
-        else if (tipologiaUpper.includes('ENTRETENIMENTO') || tipologiaUpper.includes('GAMING') || 
-                 tipologiaUpper.includes('CONSOLA') || tipologiaUpper.includes('PLAYSTATION') ||
-                 tipologiaUpper.includes('XBOX') || tipologiaUpper.includes('NINTENDO')) {
+        } else if (tipologiaUpper.includes('ENTRETENIMENTO')) {
             areaNorm = 'Entretenimento';
         }
         
         // Só adicionar se a área foi identificada
-        if (areaNorm) {
+        if (areaNorm && negocio !== 'Outros') {
             novosDados.push({
                 area: areaNorm,
                 negocio: negocio,
                 checkpoint: checkpoint,
-                pendente_peca: isPendentePeca,
+                pendente_peca: pendentePeca,
                 tat: tat
             });
         }
@@ -365,18 +359,14 @@ function processarDadosExcel(dados) {
     // Substituir dados
     dadosBrutos = novosDados;
     
-    console.log(`✅ Processados ${dadosBrutos.length} registos do ficheiro`);
+    console.log(`✅ Processados ${dadosBrutos.length} registos do ficheiro (TSC SOUTH apenas)`);
     
-    // Mostrar estatísticas detalhadas
+    // Mostrar estatísticas
     const contagemAreas = {};
-    const contagemCheckpoints = {};
     dadosBrutos.forEach(item => {
         contagemAreas[item.area] = (contagemAreas[item.area] || 0) + 1;
-        contagemCheckpoints[item.checkpoint] = (contagemCheckpoints[item.checkpoint] || 0) + 1;
     });
-    
     console.log('📊 Distribuição por área:', contagemAreas);
-    console.log('📌 Checkpoints encontrados:', contagemCheckpoints);
     
     // Atualizar dashboard
     calcularEMostrarMetricas();
@@ -384,30 +374,24 @@ function processarDadosExcel(dados) {
     return true;
 }
 
-// Função auxiliar para encontrar índice
-function encontrarIndice(cabecalhos, possiveisNomes) {
-    for (let i = 0; i < cabecalhos.length; i++) {
-        const cab = String(cabecalhos[i] || '').toLowerCase().trim();
-        for (let nome of possiveisNomes) {
-            if (cab.includes(nome.toLowerCase())) {
-                console.log(`✅ Coluna "${cabecalhos[i]}" corresponde a "${nome}" (índice ${i})`);
-                return i;
-            }
-        }
-    }
-    return -1;
-}
-
-// Função para calcular as métricas
+// Função para calcular as métricas (COM AS REGRAS FORNECIDAS)
 function calcularMetricas() {
-    // Estados que podem aparecer nos checkpoints
-    const estadosAnalise = ['pré-análise', 'pre-analise', 'pré'];
-    const estadosReparacao = ['intervenção técnica', 'intervencao tecnica', 'intervenção', 'reparação'];
-    const estadosOrcamento = ['orçamento', 'orcamento'];
-    const estadosAguarda = ['aguarda aceitação orçamento', 'aguarda aceitacao orcamento', 'aguarda'];
-    const estadosDebito = ['debit', 'débito', 'debito'];
+    // Estados para cada métrica (exatamente como especificado)
+    const estadosAnalise = ['Pré-Análise', 'Análise Técnica'];
+    const estadosReparacao = ['Intervenção Técnica'];
+    const estadosTAT = [
+        'Pré-Análise', 
+        'Análise Técnica', 
+        'Orçamento', 
+        'Aguarda Aceitação Orçamento', 
+        'Nível 3', 
+        'Controlo de Qualidade'
+    ];
+    const estadosOrcamento = ['Orçamento'];
+    const estadosAguarda = ['Aguarda Aceitação Orçamento'];
+    const estadosDebito = ['Debit'];
 
-    // Inicializar tudo a zero
+    // Inicializar métricas
     const metricas = {
         'Mobile Cliente': {
             'Garantias': { analises:0, reparacao:0, repPendentePeca:0, repNaoPendentePeca:0, somaTat:0, countTat:0, tatAberto:0, orcamento:0, agAceitacao:0, debitos:0 },
@@ -447,36 +431,43 @@ function calcularMetricas() {
         if (!metricas[area] || !metricas[area][negocio]) return;
         
         const stats = metricas[area][negocio];
-        const checkpoint = String(item.checkpoint).toLowerCase();
+        const checkpoint = item.checkpoint;
         
-        // Análises
-        if (estadosAnalise.some(estado => checkpoint.includes(estado))) {
+        // Análises (soma de Pré-Análise + Análise Técnica)
+        if (estadosAnalise.includes(checkpoint)) {
             stats.analises++;
         }
         
         // Reparação
-        if (estadosReparacao.some(estado => checkpoint.includes(estado))) {
+        if (estadosReparacao.includes(checkpoint)) {
             stats.reparacao++;
-            if (item.pendente_peca) stats.repPendentePeca++;
-            else stats.repNaoPendentePeca++;
+            
+            // Pendente/Não Pendente Peça
+            if (item.pendente_peca) {
+                stats.repPendentePeca++;
+            } else {
+                stats.repNaoPendentePeca++;
+            }
         }
         
-        // TAT
-        stats.somaTat += item.tat || 0;
-        stats.countTat++;
+        // TAT Aberto - só para estados específicos
+        if (estadosTAT.includes(checkpoint)) {
+            stats.somaTat += item.tat || 0;
+            stats.countTat++;
+        }
         
         // Orçamento
-        if (estadosOrcamento.some(estado => checkpoint.includes(estado))) {
+        if (estadosOrcamento.includes(checkpoint)) {
             stats.orcamento++;
         }
         
-        // Aguarda
-        if (estadosAguarda.some(estado => checkpoint.includes(estado))) {
+        // Aguarda Aceitação
+        if (estadosAguarda.includes(checkpoint)) {
             stats.agAceitacao++;
         }
         
         // Débitos
-        if (estadosDebito.some(estado => checkpoint.includes(estado))) {
+        if (estadosDebito.includes(checkpoint)) {
             stats.debitos++;
         }
     });
@@ -594,20 +585,14 @@ function calcularEMostrarMetricas() {
     
     // Rodapé
     document.getElementById('totalReparacoes').textContent = dadosBrutos.length;
-    
-    const estadosAbertos = ['análise', 'intervenção', 'orçamento', 'aguarda'];
-    const emAberto = dadosBrutos.filter(item => 
-        estadosAbertos.some(s => item.checkpoint.includes(s))
+    document.getElementById('emAndamento').textContent = dadosBrutos.filter(item => 
+        ['Pré-Análise', 'Análise Técnica', 'Intervenção Técnica', 'Orçamento', 'Aguarda Aceitação Orçamento'].includes(item.checkpoint)
     ).length;
-    document.getElementById('emAndamento').textContent = emAberto;
-    
     document.getElementById('concluidasHoje').textContent = '-';
     document.getElementById('ultimaAtualizacao').textContent = ultimaAtualizacao ? ultimaAtualizacao.toLocaleString('pt-PT') : '-';
     document.getElementById('dataReferencia').textContent = `📅 ${new Date().toLocaleDateString('pt-PT')}`;
     
     if (dadosBrutos.length > 0) {
         console.log('✅ Dashboard atualizado com DADOS REAIS');
-    } else {
-        console.log('✅ Dashboard atualizado (sem dados - tudo a 0)');
     }
 }
